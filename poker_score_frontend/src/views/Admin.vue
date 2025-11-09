@@ -23,6 +23,8 @@
                 <div class="cell">昵称</div>
                 <div class="cell">手机号</div>
                 <div class="cell">角色</div>
+                <div class="cell">创建时间</div>
+                <div class="cell">操作</div>
               </div>
               <div
                 v-for="user in users"
@@ -37,8 +39,39 @@
                     {{ user.role === 'admin' ? '管理员' : '普通用户' }}
                   </a-tag>
                 </div>
+                <div class="cell">{{ formatDateTime(user.created_at) }}</div>
+                <div class="cell">
+                  <a-button type="link" size="small" @click="openEditUserModal(user)">编辑</a-button>
+                </div>
               </div>
             </div>
+            <a-modal
+              v-model:open="editUserVisible"
+              title="编辑用户"
+              :confirm-loading="editUserLoading"
+              destroyOnClose
+              @ok="handleEditUserSubmit"
+              @cancel="handleEditUserCancel"
+            >
+              <a-form layout="vertical">
+                <a-form-item label="昵称">
+                  <a-input v-model:value="editUserForm.nickname" maxlength="50" />
+                </a-form-item>
+                <a-form-item label="手机号">
+                  <a-input v-model:value="editUserForm.phone" maxlength="11" />
+                </a-form-item>
+                <a-form-item label="角色">
+                  <a-select v-model:value="editUserForm.role">
+                    <a-select-option value="user">普通用户</a-select-option>
+                    <a-select-option value="admin">管理员</a-select-option>
+                  </a-select>
+                </a-form-item>
+                <a-form-item label="密码">
+                  <a-input-password v-model:value="editUserForm.password" placeholder="不修改请留空" />
+                </a-form-item>
+              </a-form>
+              <div class="modal-tip">若不修改密码，请留空（密码至少 6 位）。</div>
+            </a-modal>
             <a-pagination
               v-model:current="usersPage"
               v-model:page-size="usersPageSize"
@@ -136,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, reactive } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { LeftOutlined } from '@ant-design/icons-vue'
@@ -147,12 +180,37 @@ const router = useRouter()
 
 const activeTab = ref('users')
 
+interface EditUserForm {
+  id: number
+  phone: string
+  nickname: string
+  role: string
+  password: string
+}
+
 // 用户管理
 const users = ref<any[]>([])
 const usersPage = ref(1)
 const usersPageSize = ref(20)
 const usersTotal = ref(0)
 const usersLoading = ref(false)
+const editUserVisible = ref(false)
+const editUserLoading = ref(false)
+const editUserForm = reactive<EditUserForm>({
+  id: 0,
+  phone: '',
+  nickname: '',
+  role: 'user',
+  password: ''
+})
+
+const resetEditUserForm = () => {
+  editUserForm.id = 0
+  editUserForm.phone = ''
+  editUserForm.nickname = ''
+  editUserForm.role = 'user'
+  editUserForm.password = ''
+}
 
 // 房间管理
 const rooms = ref<any[]>([])
@@ -262,6 +320,70 @@ const loadUsers = async () => {
     message.error('加载用户列表失败')
   } finally {
     usersLoading.value = false
+  }
+}
+
+const openEditUserModal = (user: any) => {
+  editUserForm.id = user?.id ?? 0
+  editUserForm.phone = typeof user?.phone === 'string' ? user.phone : ''
+  editUserForm.nickname = typeof user?.nickname === 'string' ? user.nickname : ''
+  editUserForm.role = typeof user?.role === 'string' ? user.role : 'user'
+  editUserForm.password = ''
+  editUserVisible.value = true
+}
+
+const handleEditUserCancel = () => {
+  if (editUserLoading.value) {
+    return
+  }
+  editUserVisible.value = false
+  resetEditUserForm()
+}
+
+const handleEditUserSubmit = async () => {
+  const phone = editUserForm.phone.trim()
+  const nickname = editUserForm.nickname.trim()
+  const role = editUserForm.role
+  const password = editUserForm.password.trim()
+
+  if (!/^\d{11}$/.test(phone)) {
+    message.error('手机号需为11位数字')
+    return
+  }
+  if (!nickname) {
+    message.error('请填写昵称')
+    return
+  }
+  if (nickname.length > 50) {
+    message.error('昵称长度不能超过50个字符')
+    return
+  }
+  if (password && password.length < 6) {
+    message.error('密码至少需要6位')
+    return
+  }
+
+  const payload: { phone: string; nickname: string; role: string; password?: string } = {
+    phone,
+    nickname,
+    role
+  }
+
+  if (password) {
+    payload.password = password
+  }
+
+  editUserLoading.value = true
+  try {
+    await adminApi.updateUser(editUserForm.id, payload)
+    message.success('用户信息已更新')
+    editUserVisible.value = false
+    resetEditUserForm()
+    await loadUsers()
+  } catch (error) {
+    // 错误提示由全局拦截器处理
+  } finally {
+    editUserLoading.value = false
   }
 }
 
@@ -386,6 +508,12 @@ onMounted(() => {
 
 .room-card:hover {
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.modal-tip {
+  margin-top: 8px;
+  color: #999;
+  font-size: 12px;
 }
 
 .room-header {

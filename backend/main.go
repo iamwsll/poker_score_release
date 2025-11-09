@@ -109,6 +109,7 @@ func main() {
 		admin := api.Group("/admin", middlewares.AuthMiddleware(cfg.Session.CookieName), middlewares.AdminMiddleware())
 		{
 			admin.GET("/users", adminController.GetUsers)
+			admin.PUT("/users/:user_id", adminController.UpdateUser)
 			admin.GET("/rooms", adminController.GetRooms)
 			admin.GET("/rooms/:room_id", adminController.GetRoomDetails)
 			admin.GET("/users/:user_id/settlements", adminController.GetUserSettlements)

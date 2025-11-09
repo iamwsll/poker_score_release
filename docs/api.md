@@ -403,6 +403,7 @@
 所有 `/api/admin/**` 路径都需要管理员账号（`user.role == "admin"`）。
 
 - `/admin/users`：分页返回所有用户，结构与 `models.User` 对应，包含 `updated_at`
+- `PUT /admin/users/:user_id`：更新指定用户的角色、手机、昵称，可选传入 `password` 修改密码（留空则不变），手机号需唯一、密码至少 6 位
 - `/admin/rooms`：分页返回房间列表，附带 `member_count`、`online_count`
 - `/admin/rooms/:room_id`：返回房间详情、成员列表（按 `joined_at DESC`）以及最近 100 条操作
 - `/admin/users/:user_id/settlements`：按照时间范围过滤结算记录，并汇总 `total_chip` 和 `total_rmb`

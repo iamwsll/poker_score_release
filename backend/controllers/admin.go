@@ -1,10 +1,13 @@
 package controllers
 
 import (
+	"errors"
+	"strconv"
+	"strings"
+	"time"
+
 	"poker_score_backend/services"
 	"poker_score_backend/utils"
-	"strconv"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,6 +22,14 @@ func NewAdminController(adminService *services.AdminService) *AdminController {
 	return &AdminController{
 		adminService: adminService,
 	}
+}
+
+// UpdateUserRequest 更新用户请求体
+type UpdateUserRequest struct {
+	Phone    string `json:"phone" binding:"required"`
+	Nickname string `json:"nickname" binding:"required"`
+	Role     string `json:"role" binding:"required"`
+	Password string `json:"password"`
 }
 
 // GetUsers 获取用户列表
@@ -42,6 +53,61 @@ func (ctrl *AdminController) GetUsers(c *gin.Context) {
 		"total":     total,
 		"page":      page,
 		"page_size": pageSize,
+	})
+}
+
+// UpdateUser 更新用户信息
+func (ctrl *AdminController) UpdateUser(c *gin.Context) {
+	userIDStr := c.Param("user_id")
+	userID, err := strconv.ParseUint(userIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "用户ID格式错误")
+		return
+	}
+
+	var req UpdateUserRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "请求参数错误")
+		return
+	}
+
+	phone := strings.TrimSpace(req.Phone)
+	nickname := strings.TrimSpace(req.Nickname)
+	role := strings.TrimSpace(req.Role)
+
+	var passwordPtr *string
+	if pwd := strings.TrimSpace(req.Password); pwd != "" {
+		passwordPtr = &pwd
+	}
+
+	user, err := ctrl.adminService.UpdateUser(uint(userID), services.UpdateUserInput{
+		Phone:    phone,
+		Nickname: nickname,
+		Role:     role,
+		Password: passwordPtr,
+	})
+	if err != nil {
+		switch {
+		case errors.Is(err, services.ErrUserNotFound):
+			utils.NotFound(c, "用户不存在")
+		case errors.Is(err, services.ErrPhoneAlreadyExists):
+			utils.Conflict(c, "手机号已被使用")
+		case errors.Is(err, services.ErrInvalidRole):
+			utils.BadRequest(c, "角色不合法")
+		case errors.Is(err, services.ErrInvalidPhone):
+			utils.BadRequest(c, "手机号不合法")
+		case errors.Is(err, services.ErrInvalidNickname):
+			utils.BadRequest(c, "昵称不合法或过长")
+		case errors.Is(err, services.ErrInvalidPassword):
+			utils.BadRequest(c, "密码至少需要6位")
+		default:
+			utils.InternalServerError(c, "更新用户信息失败")
+		}
+		return
+	}
+
+	utils.SuccessWithMessage(c, "用户信息更新成功", gin.H{
+		"user": user,
 	})
 }
 
@@ -167,4 +233,3 @@ func (ctrl *AdminController) GetRoomMemberHistory(c *gin.Context) {
 		"total":   total,
 	})
 }
-

@@ -1,8 +1,13 @@
-import { get } from './request'
+import { get, put } from './request'
 
 // 获取用户列表
 export function getUsers(page = 1, pageSize = 20) {
   return get('/admin/users', { params: { page, page_size: pageSize } })
+}
+
+// 更新用户信息
+export function updateUser(userId: number, payload: { phone: string; nickname: string; role: string; password?: string }) {
+  return put(`/admin/users/${userId}`, payload)
 }
 
 // 获取房间列表

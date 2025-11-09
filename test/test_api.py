@@ -571,37 +571,50 @@ def test_admin_apis():
             cookies=test_data["session_cookies"].get("admin")
         )
         
-        # 6.3 获取所有房间列表
+        # 6.3 更新管理员用户信息
         test_api(
-            "6.3 获取所有房间列表",
+            "6.3 更新管理员用户信息",
+            "PUT",
+            f"/admin/users/{admin_user_id}",
+            data={
+                "phone": admin_phone,
+                "nickname": "管理员-已更新",
+                "role": "admin"
+            },
+            cookies=test_data["session_cookies"].get("admin")
+        )
+        
+        # 6.4 获取所有房间列表
+        test_api(
+            "6.4 获取所有房间列表",
             "GET",
             "/admin/rooms?status=all&page=1&page_size=20",
             cookies=test_data["session_cookies"].get("admin")
         )
         
-        # 6.4 获取房间详细信息
+        # 6.5 获取房间详细信息
         if test_data["rooms"]:
             room_id = test_data["rooms"][0]["id"]
             test_api(
-                "6.4 获取房间详细信息(管理员)",
+                "6.5 获取房间详细信息(管理员)",
                 "GET",
                 f"/admin/rooms/{room_id}",
                 cookies=test_data["session_cookies"].get("admin")
             )
         
-        # 6.5 获取用户历史盈亏
+        # 6.6 获取用户历史盈亏
         if test_data["users"]:
             user_id = test_data["users"][0]["id"]
             test_api(
-                "6.5 获取用户历史盈亏",
+                "6.6 获取用户历史盈亏",
                 "GET",
                 f"/admin/users/{user_id}/settlements",
                 cookies=test_data["session_cookies"].get("admin")
             )
         
-        # 6.6 获取用户进出房间历史
+        # 6.7 获取用户进出房间历史
         test_api(
-            "6.6 获取用户进出房间历史",
+            "6.7 获取用户进出房间历史",
             "GET",
             "/admin/room-member-history?page=1&page_size=50",
             cookies=test_data["session_cookies"].get("admin")
