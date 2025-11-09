@@ -201,15 +201,17 @@ func (ctrl *OperationController) GetOperations(c *gin.Context) {
 	// 获取分页参数
 	limitStr := c.DefaultQuery("limit", "50")
 	offsetStr := c.DefaultQuery("offset", "0")
+	allStr := c.DefaultQuery("all", "false")
 
 	limit, _ := strconv.Atoi(limitStr)
 	offset, _ := strconv.Atoi(offsetStr)
+	includeAll := allStr == "true" || allStr == "1"
 
 	// 获取用户ID
 	userID, _ := c.Get("user_id")
 
 	// 获取操作历史
-	operations, total, err := ctrl.operationService.GetOperations(uint(roomID), userID.(uint), limit, offset)
+	operations, total, err := ctrl.operationService.GetOperations(uint(roomID), userID.(uint), limit, offset, includeAll)
 	if err != nil {
 		utils.BadRequest(c, err.Error())
 		return

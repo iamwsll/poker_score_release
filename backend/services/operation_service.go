@@ -309,7 +309,7 @@ func (s *OperationService) NiuniuBet(roomID, userID uint, bets []NiuniuBetItem) 
 }
 
 // GetOperations 获取操作历史
-func (s *OperationService) GetOperations(roomID, userID uint, limit, offset int) ([]map[string]interface{}, int64, error) {
+func (s *OperationService) GetOperations(roomID, userID uint, limit, offset int, includeAll bool) ([]map[string]interface{}, int64, error) {
 	// 获取用户加入房间的时间
 	var member models.RoomMember
 	err := models.DB.Where("room_id = ? AND user_id = ?", roomID, userID).
@@ -320,17 +320,25 @@ func (s *OperationService) GetOperations(roomID, userID uint, limit, offset int)
 		return nil, 0, errors.New("您不在该房间中")
 	}
 
-	// 查询操作记录（只返回用户加入后的记录）
+	// 查询操作记录（默认只返回用户加入后的记录）
 	var operations []models.RoomOperation
-	query := models.DB.Where("room_id = ? AND created_at >= ?", roomID, member.JoinedAt).
+	query := models.DB.Where("room_id = ?", roomID).
 		Order("created_at DESC")
+
+	if !includeAll {
+		query = query.Where("created_at >= ?", member.JoinedAt)
+	}
 
 	// 获取总数
 	var total int64
 	query.Model(&models.RoomOperation{}).Count(&total)
 
 	// 分页查询
-	err = query.Limit(limit).Offset(offset).Find(&operations).Error
+	if limit <= 0 {
+		err = query.Limit(-1).Offset(-1).Find(&operations).Error
+	} else {
+		err = query.Limit(limit).Offset(offset).Find(&operations).Error
+	}
 	if err != nil {
 		return nil, 0, err
 	}

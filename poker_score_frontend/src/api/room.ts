@@ -61,8 +61,22 @@ export function niuniuBet(roomId: number, bets: Array<{ to_user_id: number; amou
 }
 
 // 获取操作历史
-export function getOperations(roomId: number, limit = 50, offset = 0) {
-  return get(`/rooms/${roomId}/operations`, { params: { limit, offset } })
+export function getOperations(
+  roomId: number,
+  limit = 50,
+  offset = 0,
+  options?: { all?: boolean }
+) {
+  const params: Record<string, number | string | boolean> = {
+    limit,
+    offset
+  }
+
+  if (options?.all) {
+    params.all = true
+  }
+
+  return get(`/rooms/${roomId}/operations`, { params })
 }
 
 // 获取历史金额

@@ -256,6 +256,9 @@
       :footer="null"
     >
       <div class="more-actions">
+        <a-button block size="large" :loading="loadAllOperationsLoading" @click="handleLoadAllOperations">
+          加载历史消息
+        </a-button>
         <a-button block size="large" @click="handleForceTransfer">
           积分强制转移
         </a-button>
@@ -445,6 +448,7 @@ const kickLoading = ref(false)
 const forceTransferLoading = ref(false)
 const settlementLoading = ref(false)
 const confirmSettlementLoading = ref(false)
+const loadAllOperationsLoading = ref(false)
 
 // 历史金额
 const historyBetAmounts = ref<number[]>([])
@@ -970,6 +974,22 @@ const confirmKick = async () => {
     // 错误已处理
   } finally {
     kickLoading.value = false
+  }
+}
+
+const handleLoadAllOperations = async () => {
+  loadAllOperationsLoading.value = true
+  try {
+    const res = await roomApi.getOperations(roomId.value, 0, 0, { all: true })
+    const operations = Array.isArray(res.data?.operations) ? res.data.operations : []
+    roomStore.setOperations(operations)
+    message.success('已加载全部历史消息')
+    showMoreModal.value = false
+  } catch (error) {
+    console.error(error)
+    message.error('加载历史消息失败')
+  } finally {
+    loadAllOperationsLoading.value = false
   }
 }
 
