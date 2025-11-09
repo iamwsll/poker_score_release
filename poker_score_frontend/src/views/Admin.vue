@@ -93,8 +93,8 @@
           </div>
         </a-tab-pane>
 
-        <!-- 进出记录 -->
-        <a-tab-pane key="history" tab="进出记录">
+        <!-- 操作记录 -->
+        <a-tab-pane key="history" tab="操作记录">
           <div class="tab-content">
             <a-button @click="loadHistory" :loading="historyLoading" style="margin-bottom: 16px">
               刷新
@@ -103,20 +103,22 @@
               <div class="table-row header-row">
                 <div class="cell">用户</div>
                 <div class="cell">房间号</div>
-                <div class="cell">加入时间</div>
-                <div class="cell">离开时间</div>
-                <div class="cell">时长(分钟)</div>
+                <div class="cell">操作</div>
+                <div class="cell">目标用户</div>
+                <div class="cell">描述</div>
+                <div class="cell">时间</div>
               </div>
               <div
                 v-for="record in history"
                 :key="record.id"
                 class="table-row"
               >
-                <div class="cell">{{ record.nickname }}</div>
-                <div class="cell">{{ record.room_code }}</div>
-                <div class="cell">{{ formatDateTime(record.joined_at) }}</div>
-                <div class="cell">{{ record.left_at ? formatDateTime(record.left_at) : '在线中' }}</div>
-                <div class="cell">{{ record.duration_minutes || '-' }}</div>
+                <div class="cell">{{ record.user_nickname || record.nickname || '-' }}</div>
+                <div class="cell">{{ record.room_code || '-' }}</div>
+                <div class="cell">{{ renderOperationType(record.operation_type) }}</div>
+                <div class="cell">{{ renderTargetUser(record) }}</div>
+                <div class="cell">{{ renderDescription(record) }}</div>
+                <div class="cell">{{ formatDateTime(record.created_at) }}</div>
               </div>
             </div>
             <a-pagination
@@ -160,7 +162,7 @@ const roomsTotal = ref(0)
 const roomsStatus = ref('all')
 const roomsLoading = ref(false)
 
-// 进出记录
+// 操作记录
 const history = ref<any[]>([])
 const historyPage = ref(1)
 const historyPageSize = ref(20)
@@ -168,8 +170,85 @@ const historyTotal = ref(0)
 const historyLoading = ref(false)
 
 // 格式化日期时间
-const formatDateTime = (dateStr: string) => {
+const formatDateTime = (dateStr?: string) => {
+  if (!dateStr) {
+    return '-'
+  }
   return dayjs(dateStr).format('MM-DD HH:mm')
+}
+
+const operationTypeLabels: Record<string, string> = {
+  create: '创建房间',
+  join: '加入房间',
+  leave: '离开房间',
+  return: '返回房间',
+  kick: '踢出房间',
+  settlement_confirmed: '确认结算',
+}
+
+const renderOperationType = (type?: string) => {
+  if (!type) {
+    return '-'
+  }
+  return operationTypeLabels[type] || type
+}
+
+const renderTargetUser = (record: any) => {
+  if (record?.target_nickname) {
+    return record.target_nickname
+  }
+  if (record?.target_user_id) {
+    return `ID ${record.target_user_id}`
+  }
+  return '-'
+}
+
+const renderDescription = (record: any) => {
+  if (record?.operation_type === 'settlement_confirmed' && record?.metadata) {
+    try {
+      const meta = record.metadata as any
+      const batch =
+        typeof meta?.batch === 'string' && meta.batch
+          ? `批次 ${meta.batch.slice(0, 8)}`
+          : ''
+      const chipRate =
+        typeof meta?.chip_rate === 'string' && meta.chip_rate
+          ? `比例 ${meta.chip_rate}`
+          : ''
+      const details = Array.isArray(meta?.details) ? meta.details : []
+      const items = (details as any[])
+        .map((item) => {
+          const name =
+            typeof item?.nickname === 'string' && item.nickname
+              ? item.nickname
+              : item?.user_id
+              ? `ID ${item.user_id}`
+              : ''
+          if (!name) {
+            return ''
+          }
+          const chip =
+            typeof item?.chip_amount === 'number' ? item.chip_amount : null
+          const rmb =
+            typeof item?.rmb_amount === 'number'
+              ? Number(item.rmb_amount).toFixed(2)
+              : null
+          const chipText = chip !== null ? `${chip}筹码` : ''
+          const rmbText = rmb !== null ? `¥${rmb}` : ''
+          const amountText =
+            chipText && rmbText
+              ? `${chipText}（${rmbText}）`
+              : chipText || rmbText
+          return amountText ? `${name}: ${amountText}` : name
+        })
+        .filter((text) => !!text)
+      const summary = items.join('，')
+      return [batch, chipRate, summary].filter((text) => !!text).join(' | ') || record.description || '-'
+    } catch (error) {
+      return record.description || '-'
+    }
+  }
+  return record?.description || '-'
 }
 
 // 加载用户列表
@@ -200,7 +279,7 @@ const loadRooms = async () => {
   }
 }
 
-// 加载进出记录
+// 加载操作记录
 const loadHistory = async () => {
   historyLoading.value = true
   try {
@@ -208,7 +287,7 @@ const loadHistory = async () => {
     history.value = res.data.records
     historyTotal.value = res.data.total
   } catch (error) {
-    message.error('加载进出记录失败')
+    message.error('加载操作记录失败')
   } finally {
     historyLoading.value = false
   }
@@ -265,7 +344,7 @@ onMounted(() => {
 
 .table-row {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: 1.2fr 1fr 1fr 1.2fr 2fr 1.2fr;
   border-bottom: 1px solid #f0f0f0;
 }
 
@@ -330,11 +409,11 @@ onMounted(() => {
 
 @media (max-width: 768px) {
   .table-row {
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
-  
-  .cell:nth-child(n+3) {
-    grid-column: span 1;
+
+  .cell {
+    white-space: normal;
   }
 }
 </style>
