@@ -23,6 +23,7 @@ func (RoomOperation) TableName() string {
 
 // 操作类型常量
 const (
+	OpTypeCreate              = "create"               // 创建房间
 	OpTypeJoin                = "join"                 // 加入房间
 	OpTypeLeave               = "leave"                // 离开房间
 	OpTypeReturn              = "return"               // 返回房间

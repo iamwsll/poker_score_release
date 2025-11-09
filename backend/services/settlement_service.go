@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
@@ -139,8 +140,75 @@ func (s *SettlementService) ConfirmSettlement(roomID, userID uint) (string, time
 		return "", time.Time{}, err
 	}
 
+	// 收集结算详情
+	type settlementDetail struct {
+		UserID     uint    `json:"user_id"`
+		Nickname   string  `json:"nickname"`
+		ChipAmount int     `json:"chip_amount"`
+		RmbAmount  float64 `json:"rmb_amount"`
+	}
+
+	userIDSet := make(map[uint]struct{})
+	for _, balance := range balances {
+		if balance.Balance == 0 {
+			continue
+		}
+		userIDSet[balance.UserID] = struct{}{}
+	}
+
+	userIDs := make([]uint, 0, len(userIDSet))
+	for id := range userIDSet {
+		userIDs = append(userIDs, id)
+	}
+
+	userMap := make(map[uint]models.User)
+	if len(userIDs) > 0 {
+		var users []models.User
+		if err := models.DB.Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+			log.Printf("获取结算用户信息失败: RoomID=%d, %v", roomID, err)
+		} else {
+			for _, u := range users {
+				userMap[u.ID] = u
+			}
+		}
+	}
+
+	details := make([]settlementDetail, 0, len(userIDs))
+	for _, balance := range balances {
+		if balance.Balance == 0 {
+			continue
+		}
+
+		nickname := ""
+		if user, exists := userMap[balance.UserID]; exists {
+			nickname = user.Nickname
+		}
+
+		details = append(details, settlementDetail{
+			UserID:     balance.UserID,
+			Nickname:   nickname,
+			ChipAmount: balance.Balance,
+			RmbAmount:  calculateRmbAmount(balance.Balance, room.ChipRate),
+		})
+	}
+
+	descPayload := map[string]interface{}{
+		"batch":      settlementBatch,
+		"settled_at": settledAt.Format(time.RFC3339),
+		"chip_rate":  room.ChipRate,
+		"details":    details,
+	}
+
+	descBytes, err := json.Marshal(descPayload)
+	description := "确认了结算"
+	if err != nil {
+		log.Printf("序列化结算详情失败: RoomID=%d, Batch=%s, %v", roomID, settlementBatch, err)
+	} else {
+		description = string(descBytes)
+	}
+
 	// 记录操作
-	s.roomService.recordOperation(roomID, userID, models.OpTypeSettlementConfirmed, nil, nil, "确认了结算")
+	s.roomService.recordOperation(roomID, userID, models.OpTypeSettlementConfirmed, nil, nil, description)
 
 	log.Printf("确认结算成功: RoomID=%d, UserID=%d, Batch=%s", roomID, userID, settlementBatch)
 	s.roomService.broadcastSettlementConfirmed(roomID, userID, settlementBatch, settledAt)

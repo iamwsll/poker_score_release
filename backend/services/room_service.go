@@ -98,6 +98,9 @@ func (s *RoomService) CreateRoom(userID uint, roomType, chipRate string) (*model
 
 	log.Printf("房间创建成功: ID=%d, RoomCode=%s, Type=%s, CreatedBy=%d", room.ID, room.RoomCode, room.RoomType, userID)
 
+	// 记录房间创建操作
+	s.recordOperation(room.ID, userID, models.OpTypeCreate, nil, nil, "创建了房间")
+
 	// 创建者自动加入房间
 	_, err = s.JoinRoom(userID, room.ID)
 	if err != nil {

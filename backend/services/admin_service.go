@@ -1,6 +1,7 @@
 package services
 
 import (
+	"encoding/json"
 	"poker_score_backend/models"
 	"time"
 )
@@ -226,10 +227,19 @@ func (s *AdminService) GetUserSettlements(userID uint, startTime, endTime *time.
 
 // GetRoomMemberHistory 获取用户进出房间历史
 func (s *AdminService) GetRoomMemberHistory(userID, roomID *uint, page, pageSize int) ([]map[string]interface{}, int64, error) {
-	query := models.DB.Model(&models.RoomMember{})
+	eventTypes := []string{
+		models.OpTypeCreate,
+		models.OpTypeJoin,
+		models.OpTypeLeave,
+		models.OpTypeReturn,
+		models.OpTypeKick,
+		models.OpTypeSettlementConfirmed,
+	}
+
+	query := models.DB.Model(&models.RoomOperation{}).Where("operation_type IN ?", eventTypes)
 
 	if userID != nil {
-		query = query.Where("user_id = ?", *userID)
+		query = query.Where("(user_id = ?) OR (target_user_id = ?)", *userID, *userID)
 	}
 	if roomID != nil {
 		query = query.Where("room_id = ?", *roomID)
@@ -243,38 +253,108 @@ func (s *AdminService) GetRoomMemberHistory(userID, roomID *uint, page, pageSize
 	}
 
 	// 分页查询
-	var members []models.RoomMember
+	var operations []models.RoomOperation
 	offset := (page - 1) * pageSize
-	err = query.Offset(offset).Limit(pageSize).Order("joined_at DESC").Find(&members).Error
+	err = query.Order("created_at DESC").Offset(offset).Limit(pageSize).Find(&operations).Error
 	if err != nil {
 		return nil, 0, err
 	}
 
-	// 组装结果
-	result := make([]map[string]interface{}, 0, len(members))
-	for _, member := range members {
-		var user models.User
-		var room models.Room
-		models.DB.First(&user, member.UserID)
-		models.DB.First(&room, member.RoomID)
+	if len(operations) == 0 {
+		return []map[string]interface{}{}, total, nil
+	}
 
-		// 计算在线时长（分钟）
-		var durationMinutes int64
-		if member.LeftAt != nil {
-			durationMinutes = int64(member.LeftAt.Sub(member.JoinedAt).Minutes())
+	roomIDSet := make(map[uint]struct{})
+	userIDSet := make(map[uint]struct{})
+	targetIDSet := make(map[uint]struct{})
+
+	for _, op := range operations {
+		roomIDSet[op.RoomID] = struct{}{}
+		userIDSet[op.UserID] = struct{}{}
+		if op.TargetUserID != nil {
+			targetIDSet[*op.TargetUserID] = struct{}{}
+		}
+	}
+
+	uniqueUserIDs := make([]uint, 0, len(userIDSet)+len(targetIDSet))
+	for id := range userIDSet {
+		uniqueUserIDs = append(uniqueUserIDs, id)
+	}
+	for id := range targetIDSet {
+		if _, exists := userIDSet[id]; !exists {
+			uniqueUserIDs = append(uniqueUserIDs, id)
+		}
+	}
+
+	userMap := make(map[uint]models.User)
+	if len(uniqueUserIDs) > 0 {
+		var users []models.User
+		if err := models.DB.Where("id IN ?", uniqueUserIDs).Find(&users).Error; err != nil {
+			return nil, 0, err
+		}
+		for _, u := range users {
+			userMap[u.ID] = u
+		}
+	}
+
+	roomIDs := make([]uint, 0, len(roomIDSet))
+	for id := range roomIDSet {
+		roomIDs = append(roomIDs, id)
+	}
+
+	roomMap := make(map[uint]models.Room)
+	if len(roomIDs) > 0 {
+		var rooms []models.Room
+		if err := models.DB.Where("id IN ?", roomIDs).Find(&rooms).Error; err != nil {
+			return nil, 0, err
+		}
+		for _, room := range rooms {
+			roomMap[room.ID] = room
+		}
+	}
+
+	result := make([]map[string]interface{}, 0, len(operations))
+	for _, op := range operations {
+		record := map[string]interface{}{
+			"id":             op.ID,
+			"room_id":        op.RoomID,
+			"room_code":      "",
+			"room_type":      "",
+			"user_id":        op.UserID,
+			"user_nickname":  "",
+			"operation_type": op.OperationType,
+			"description":    op.Description,
+			"created_at":     op.CreatedAt,
 		}
 
-		result = append(result, map[string]interface{}{
-			"id":               member.ID,
-			"room_id":          room.ID,
-			"room_code":        room.RoomCode,
-			"user_id":          user.ID,
-			"nickname":         user.Nickname,
-			"joined_at":        member.JoinedAt,
-			"left_at":          member.LeftAt,
-			"status":           member.Status,
-			"duration_minutes": durationMinutes,
-		})
+		if room, ok := roomMap[op.RoomID]; ok {
+			record["room_code"] = room.RoomCode
+			record["room_type"] = room.RoomType
+		}
+
+		if user, ok := userMap[op.UserID]; ok {
+			record["user_nickname"] = user.Nickname
+		}
+
+		if op.Amount != nil {
+			record["amount"] = *op.Amount
+		}
+
+		if op.TargetUserID != nil {
+			record["target_user_id"] = *op.TargetUserID
+			if targetUser, ok := userMap[*op.TargetUserID]; ok {
+				record["target_nickname"] = targetUser.Nickname
+			}
+		}
+
+		if op.Description != "" {
+			var metadata interface{}
+			if err := json.Unmarshal([]byte(op.Description), &metadata); err == nil {
+				record["metadata"] = metadata
+			}
+		}
+
+		result = append(result, record)
 	}
 
 	return result, total, nil
