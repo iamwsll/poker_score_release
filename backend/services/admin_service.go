@@ -186,6 +186,9 @@ func (s *AdminService) GetRoomDetails(roomID uint) (map[string]interface{}, erro
 		return nil, err
 	}
 
+	// 计算桌面积分（无需依赖管理员是否在房间中）
+	tableBalance := (&RoomService{}).CalculateTableBalance(room.ID)
+
 	// 查询所有成员
 	var members []models.RoomMember
 	err = models.DB.Where("room_id = ?", roomID).Order("joined_at DESC").Find(&members).Error
@@ -243,14 +246,18 @@ func (s *AdminService) GetRoomDetails(roomID uint) (map[string]interface{}, erro
 
 	return map[string]interface{}{
 		"room": map[string]interface{}{
-			"id":        room.ID,
-			"room_code": room.RoomCode,
-			"room_type": room.RoomType,
-			"chip_rate": room.ChipRate,
-			"status":    room.Status,
+			"id":            room.ID,
+			"room_code":     room.RoomCode,
+			"room_type":     room.RoomType,
+			"chip_rate":     room.ChipRate,
+			"status":        room.Status,
+			"dissolved_at":  room.DissolvedAt,
+			"table_balance": tableBalance,
 		},
 		"members":    memberList,
 		"operations": operationList,
+		// 为兼容历史调用保留独立字段，便于前端直接取用
+		"table_balance": tableBalance,
 	}, nil
 }
 

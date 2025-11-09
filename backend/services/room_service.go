@@ -339,6 +339,7 @@ func (s *RoomService) GetRoomDetails(roomID, userID uint) (map[string]interface{
 
 	// 检查用户是否在房间中
 	var member models.RoomMember
+	// left_at 仍作为“是否仍在房间中”的标识字段（未设置 left_at 表示成员仍被视为当前成员）
 	err = models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error
 	if err != nil {
 		return nil, errors.New("您不在该房间中")

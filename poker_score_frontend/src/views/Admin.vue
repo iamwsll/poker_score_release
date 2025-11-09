@@ -100,7 +100,7 @@
                 v-for="room in rooms"
                 :key="room.id"
                 class="room-card"
-                @click="viewRoomDetail(room.id)"
+                @click="viewRoomDetail(room)"
               >
                 <div class="room-header">
                   <span class="room-code">{{ room.room_code }}</span>
@@ -164,12 +164,94 @@
           </div>
         </a-tab-pane>
       </a-tabs>
+
+      <a-modal
+        :open="dissolvedRoomDetailVisible"
+        :title="dissolvedRoomModalTitle"
+        width="720px"
+        :footer="null"
+        destroy-on-close
+        @cancel="handleCloseDissolvedDetail"
+      >
+        <div v-if="dissolvedRoomDetailLoading" class="detail-loading">
+          <a-spin />
+        </div>
+        <div v-else-if="dissolvedRoomDetail" class="detail-content">
+          <div v-if="dissolvedRoomDetail.room" class="detail-section">
+            <div class="detail-section-title">房间信息</div>
+            <div class="detail-item">房间号：{{ dissolvedRoomDetail.room.room_code }}</div>
+            <div class="detail-item">类型：{{ renderRoomType(dissolvedRoomDetail.room.room_type) }}</div>
+            <div class="detail-item">比例：{{ dissolvedRoomDetail.room.chip_rate }}</div>
+            <div class="detail-item">
+              状态：
+              {{ dissolvedRoomDetail.room.status === 'active' ? '活跃' : '已解散' }}
+            </div>
+            <div class="detail-item">桌面积分：{{ dissolvedRoomDetail.table_balance }}</div>
+            <div class="detail-item">
+              解散时间：
+              {{ dissolvedRoomDetail.room.dissolved_at ? formatDateTime(dissolvedRoomDetail.room.dissolved_at) : '-' }}
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="detail-section-title">成员</div>
+            <div v-if="!dissolvedRoomDetail.members || !dissolvedRoomDetail.members.length" class="detail-empty">
+              暂无成员数据
+            </div>
+            <div v-else class="detail-table">
+              <div class="detail-table-header">
+                <span>成员</span>
+                <span>积分</span>
+                <span>状态</span>
+                <span>加入时间</span>
+                <span>离开时间</span>
+              </div>
+              <div
+                v-for="member in dissolvedRoomDetail.members"
+                :key="member.user_id"
+                class="detail-table-row"
+              >
+                <span>{{ member.nickname || `用户${member.user_id}` }}</span>
+                <span>{{ member.balance ?? 0 }}</span>
+                <span>{{ member.status === 'online' ? '在线' : '离线' }}</span>
+                <span>{{ member.joined_at ? formatDateTime(member.joined_at) : '-' }}</span>
+                <span>{{ member.left_at ? formatDateTime(member.left_at) : '-' }}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="detail-section">
+            <div class="detail-section-title">最近操作</div>
+            <div v-if="!dissolvedRoomDetail.operations || !dissolvedRoomDetail.operations.length" class="detail-empty">
+              暂无操作记录
+            </div>
+            <div v-else class="detail-operations">
+              <div
+                v-for="op in dissolvedRoomDetail.operations"
+                :key="op.id"
+                class="detail-operation-item"
+              >
+                <div class="detail-operation-header">
+                  <span class="detail-operation-user">{{ op.nickname || `用户${op.user_id}` }}</span>
+                  <span class="detail-operation-time">{{ formatDateTime(op.created_at) }}</span>
+                </div>
+                <div class="detail-operation-desc">
+                  <span class="detail-operation-type">{{ renderOperationType(op.operation_type) }}</span>
+                  <span class="detail-operation-description">{{ op.description }}</span>
+                  <span v-if="typeof op.amount === 'number'" class="detail-operation-amount">金额：{{ op.amount }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div v-else class="detail-empty">暂无数据</div>
+      </a-modal>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, reactive } from 'vue'
+import { ref, onMounted, reactive, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { LeftOutlined } from '@ant-design/icons-vue'
@@ -219,6 +301,16 @@ const roomsPageSize = ref(20)
 const roomsTotal = ref(0)
 const roomsStatus = ref('all')
 const roomsLoading = ref(false)
+const dissolvedRoomDetailVisible = ref(false)
+const dissolvedRoomDetailLoading = ref(false)
+const dissolvedRoomDetail = ref<any | null>(null)
+
+const dissolvedRoomModalTitle = computed(() => {
+  if (dissolvedRoomDetail.value?.room?.room_code) {
+    return `房间 ${dissolvedRoomDetail.value.room.room_code}`
+  }
+  return '房间详情'
+})
 
 // 操作记录
 const history = ref<any[]>([])
@@ -249,6 +341,16 @@ const renderOperationType = (type?: string) => {
     return '-'
   }
   return operationTypeLabels[type] || type
+}
+
+const renderRoomType = (type?: string) => {
+  if (type === 'texas') {
+    return '单计分'
+  }
+  if (type === 'niuniu') {
+    return '多计分'
+  }
+  return type || '-'
 }
 
 const renderTargetUser = (record: any) => {
@@ -416,8 +518,41 @@ const loadHistory = async () => {
 }
 
 // 查看房间详情
-const viewRoomDetail = (roomId: number) => {
-  router.push(`/room/${roomId}`)
+const viewRoomDetail = (room: any) => {
+  if (!room || typeof room.id !== 'number') {
+    return
+  }
+
+  if (room.status === 'active') {
+    router.push(`/room/${room.id}`)
+    return
+  }
+
+  dissolvedRoomDetailVisible.value = true
+  dissolvedRoomDetailLoading.value = true
+  dissolvedRoomDetail.value = null
+  loadDissolvedRoomDetail(room.id)
+}
+
+const loadDissolvedRoomDetail = async (roomId: number) => {
+  dissolvedRoomDetailLoading.value = true
+  try {
+    const res = await adminApi.getRoomDetails(roomId)
+    dissolvedRoomDetail.value = res.data
+  } catch (error) {
+    message.error('加载房间详情失败')
+    dissolvedRoomDetailVisible.value = false
+  } finally {
+    dissolvedRoomDetailLoading.value = false
+  }
+}
+
+const handleCloseDissolvedDetail = () => {
+  if (dissolvedRoomDetailLoading.value) {
+    return
+  }
+  dissolvedRoomDetailVisible.value = false
+  dissolvedRoomDetail.value = null
 }
 
 onMounted(() => {
@@ -533,6 +668,121 @@ onMounted(() => {
   font-size: 14px;
   color: #666;
   line-height: 1.8;
+}
+
+.detail-loading {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  padding: 40px 0;
+}
+
+.detail-content {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.detail-section {
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 16px;
+  background: #fafafa;
+}
+
+.detail-section-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin-bottom: 12px;
+  color: #333;
+}
+
+.detail-item {
+  font-size: 14px;
+  color: #555;
+  line-height: 1.8;
+}
+
+.detail-empty {
+  font-size: 14px;
+  color: #999;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.detail-table {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.detail-table-header,
+.detail-table-row {
+  display: grid;
+  grid-template-columns: 1.5fr 1fr 1fr 1.5fr 1.5fr;
+  gap: 12px;
+  font-size: 14px;
+}
+
+.detail-table-header {
+  font-weight: 600;
+  color: #555;
+}
+
+.detail-table-row {
+  padding: 8px 0;
+  border-top: 1px dashed #e0e0e0;
+  color: #666;
+}
+
+.detail-table-row:first-of-type {
+  border-top: none;
+}
+
+.detail-operations {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.detail-operation-item {
+  border: 1px solid #e8e8e8;
+  border-radius: 8px;
+  padding: 12px 16px;
+  background: white;
+}
+
+.detail-operation-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 8px;
+  color: #999;
+}
+
+.detail-operation-user {
+  font-weight: 600;
+  color: #555;
+}
+
+.detail-operation-desc {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 14px;
+  color: #555;
+}
+
+.detail-operation-type {
+  color: #667eea;
+}
+
+.detail-operation-description {
+  flex: 1;
+}
+
+.detail-operation-amount {
+  color: #f56c6c;
 }
 
 @media (max-width: 768px) {
