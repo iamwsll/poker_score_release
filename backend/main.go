@@ -47,7 +47,7 @@ func main() {
 
 	// 创建控制器
 	authController := controllers.NewAuthController(authService, cfg)
-	roomController := controllers.NewRoomController(roomService)
+	roomController := controllers.NewRoomController(roomService, settlementService)
 	operationController := controllers.NewOperationController(operationService)
 	settlementController := controllers.NewSettlementController(settlementService)
 	recordController := controllers.NewRecordController(recordService)
@@ -84,6 +84,7 @@ func main() {
 			rooms.POST("/:room_id/return", roomController.ReturnToRoom)
 			rooms.POST("/:room_id/leave", roomController.LeaveRoom)
 			rooms.POST("/:room_id/kick", roomController.KickUser)
+			rooms.POST("/:room_id/dissolve", roomController.DissolveRoom)
 
 			// 房间操作
 			rooms.POST("/:room_id/bet", operationController.Bet)

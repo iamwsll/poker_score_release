@@ -39,6 +39,7 @@ export interface RoomInfo {
   room_type: 'texas' | 'niuniu'
   chip_rate: string
   status: string
+  created_by: number
   table_balance: number
   my_balance: number
   members: RoomMember[]
@@ -752,16 +753,26 @@ export const useRoomStore = defineStore('room', () => {
         break
       }
 
-      case 'room_dissolved':
+      case 'room_dissolved': {
+        const dissolvedAt =
+          typeof message.data?.dissolved_at === 'string'
+            ? message.data.dissolved_at
+            : new Date().toISOString()
+
         addOperation({
           id: Date.now(),
           user_id: 0,
           nickname: '',
           operation_type: 'room_dissolved',
           description: '房间已解散',
-          created_at: message.data.dissolved_at ?? new Date().toISOString(),
+          created_at: dissolvedAt,
         })
+
+        antdMessage.info('房间已解散')
+        clearRoomInfo()
+        router.push('/')
         break
+      }
     }
   }
 

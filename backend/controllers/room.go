@@ -1,6 +1,7 @@
 package controllers
 
 import (
+	"fmt"
 	"poker_score_backend/services"
 	"poker_score_backend/utils"
 	"strconv"
@@ -10,13 +11,15 @@ import (
 
 // RoomController 房间控制器
 type RoomController struct {
-	roomService *services.RoomService
+	roomService       *services.RoomService
+	settlementService *services.SettlementService
 }
 
 // NewRoomController 创建房间控制器
-func NewRoomController(roomService *services.RoomService) *RoomController {
+func NewRoomController(roomService *services.RoomService, settlementService *services.SettlementService) *RoomController {
 	return &RoomController{
-		roomService: roomService,
+		roomService:       roomService,
+		settlementService: settlementService,
 	}
 }
 
@@ -213,4 +216,49 @@ func (ctrl *RoomController) KickUser(c *gin.Context) {
 	}
 
 	utils.SuccessWithMessage(c, "踢出成功", nil)
+}
+
+// DissolveRoom 解散房间
+func (ctrl *RoomController) DissolveRoom(c *gin.Context) {
+	// 获取房间ID
+	roomIDStr := c.Param("room_id")
+	roomID, err := strconv.ParseUint(roomIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "房间ID格式错误")
+		return
+	}
+
+	// 获取用户ID
+	userIDVal, _ := c.Get("user_id")
+	userID := userIDVal.(uint)
+
+	// 校验是否为房间成员
+	if err := ctrl.roomService.EnsureActiveMember(uint(roomID), userID); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	// 校验桌面积分
+	tableBalance := ctrl.roomService.CalculateTableBalance(uint(roomID))
+	if tableBalance != 0 {
+		utils.BadRequest(c, fmt.Sprintf("桌面积分不为0，当前桌面积分：%d，请先处理桌面积分", tableBalance))
+		return
+	}
+
+	// 触发结算
+	if _, _, err := ctrl.settlementService.ConfirmSettlement(uint(roomID), userID); err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	// 解散房间
+	dissolvedAt, err := ctrl.roomService.ManualDissolveRoom(uint(roomID), userID)
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	utils.SuccessWithMessage(c, "房间已解散", gin.H{
+		"dissolved_at": dissolvedAt,
+	})
 }

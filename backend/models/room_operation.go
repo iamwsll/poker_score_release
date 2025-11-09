@@ -34,4 +34,5 @@ const (
 	OpTypeSettlementInitiated = "settlement_initiated" // 发起结算
 	OpTypeSettlementConfirmed = "settlement_confirmed" // 确认结算
 	OpTypeNiuniuBet           = "niuniu_bet"           // 牛牛下注
+	OpTypeRoomDissolved       = "room_dissolved"       // 房间被解散
 )

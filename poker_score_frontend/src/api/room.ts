@@ -30,6 +30,11 @@ export function leaveRoom(roomId: number) {
   return post(`/rooms/${roomId}/leave`)
 }
 
+// 解散房间
+export function dissolveRoom(roomId: number) {
+  return post(`/rooms/${roomId}/dissolve`)
+}
+
 // 踢出用户
 export function kickUser(roomId: number, userId: number) {
   return post(`/rooms/${roomId}/kick`, { user_id: userId })

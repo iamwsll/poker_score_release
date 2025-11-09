@@ -244,6 +244,90 @@ func (s *RoomService) KickUser(roomID, userID, targetUserID uint) error {
 	return nil
 }
 
+// EnsureActiveMember 确保用户仍在房间中
+func (s *RoomService) EnsureActiveMember(roomID, userID uint) error {
+	var member models.RoomMember
+	err := models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return errors.New("您不在该房间中")
+		}
+		return err
+	}
+	return nil
+}
+
+// ManualDissolveRoom 手动解散房间
+func (s *RoomService) ManualDissolveRoom(roomID, userID uint) (time.Time, error) {
+	var dissolvedAt time.Time
+
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
+		var room models.Room
+		if err := tx.First(&room, roomID).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("房间不存在")
+			}
+			return err
+		}
+
+		if room.Status != "active" {
+			return errors.New("房间已解散")
+		}
+
+		var member models.RoomMember
+		if err := tx.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error; err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return errors.New("您不在该房间中")
+			}
+			return err
+		}
+
+		tableBalance := s.CalculateTableBalanceWithDB(tx, roomID)
+		if tableBalance != 0 {
+			return fmt.Errorf("桌面积分不为0，当前桌面积分：%d，请先处理桌面积分", tableBalance)
+		}
+
+		now := time.Now()
+		res := tx.Model(&models.Room{}).
+			Where("id = ? AND status = ?", roomID, "active").
+			Updates(map[string]interface{}{
+				"status":       "dissolved",
+				"dissolved_at": now,
+			})
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errors.New("房间状态已发生变化，请刷新后重试")
+		}
+
+		if err := tx.Model(&models.RoomMember{}).
+			Where("room_id = ? AND left_at IS NULL", roomID).
+			Updates(map[string]interface{}{
+				"status":  "offline",
+				"left_at": now,
+			}).Error; err != nil {
+			return err
+		}
+
+		if _, err := s.recordOperationWithDB(tx, roomID, userID, models.OpTypeRoomDissolved, nil, nil, "解散了房间"); err != nil {
+			return err
+		}
+
+		dissolvedAt = now
+		return nil
+	})
+
+	if err != nil {
+		return time.Time{}, err
+	}
+
+	log.Printf("房间由用户手动解散: RoomID=%d, UserID=%d", roomID, userID)
+	s.broadcastRoomDissolved(roomID, dissolvedAt)
+
+	return dissolvedAt, nil
+}
+
 // GetRoomDetails 获取房间详情
 func (s *RoomService) GetRoomDetails(roomID, userID uint) (map[string]interface{}, error) {
 	// 查询房间信息
@@ -281,6 +365,7 @@ func (s *RoomService) GetRoomDetails(roomID, userID uint) (map[string]interface{
 		"room_type":     room.RoomType,
 		"chip_rate":     room.ChipRate,
 		"status":        room.Status,
+		"created_by":    room.CreatedBy,
 		"table_balance": tableBalance,
 		"my_balance":    myBalance,
 		"members":       members,

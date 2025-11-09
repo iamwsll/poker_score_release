@@ -262,6 +262,9 @@
         <a-button block size="large" @click="handleKickUser">
           有人走了？
         </a-button>
+        <a-button block size="large" type="primary" danger @click="handleDissolveRoom">
+          解散房间
+        </a-button>
       </div>
     </a-modal>
 
@@ -774,6 +777,9 @@ const formatOperationDescription = (op: RoomOperation) => {
       }
       break
     }
+    case 'room_dissolved':
+      parts.push('解散了房间')
+      break
     default:
       parts.push(op.description)
   }
@@ -983,6 +989,42 @@ const handleForceTransfer = () => {
   }
 
   showForceTransferModal.value = true
+}
+
+const handleDissolveRoom = () => {
+  showMoreModal.value = false
+
+  if (!roomStore.roomInfo) {
+    message.warning('房间信息加载中，请稍后再试')
+    return
+  }
+
+  const tableBalance = Number(roomStore.roomInfo.table_balance) || 0
+  if (tableBalance !== 0) {
+    message.warning('桌面积分不为0，请先把积分转移给正确的用户')
+    return
+  }
+
+  Modal.confirm({
+    title: '确认解散房间',
+    content: '解散房间会触发结算，并让所有成员离线。确定要继续吗？',
+    okText: '解散房间',
+    cancelText: '取消',
+    okButtonProps: {
+      danger: true,
+    },
+    onOk: () => {
+      return roomApi
+        .dissolveRoom(roomId.value)
+        .then(() => {
+          message.success('房间已解散')
+        })
+        .catch((error) => {
+          console.error(error)
+          throw error
+        })
+    },
+  })
 }
 
 const selectKickUser = (userId: number) => {
