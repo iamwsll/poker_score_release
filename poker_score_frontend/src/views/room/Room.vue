@@ -316,7 +316,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onUnmounted, watch, type Ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
@@ -372,6 +372,13 @@ const confirmSettlementLoading = ref(false)
 // 历史金额
 const historyBetAmounts = ref<number[]>([])
 const historyWithdrawAmounts = ref<number[]>([])
+
+const HISTORY_MAX_LENGTH = 6
+const prependHistoryAmount = (list: Ref<number[]>, amount?: number | null) => {
+  if (!amount || amount <= 0) return
+  const deduped = list.value.filter((value) => value !== amount)
+  list.value = [amount, ...deduped].slice(0, HISTORY_MAX_LENGTH)
+}
 
 // 结算相关
 const settlementPlan = ref<SettlementPlanItem[]>([])
@@ -662,6 +669,7 @@ const handleBet = async () => {
     return
   }
 
+  const amount = betAmount.value
   betLoading.value = true
   try {
 			const res = await roomApi.bet(roomId.value, betAmount.value)
@@ -670,6 +678,7 @@ const handleBet = async () => {
     betAmount.value = undefined
 			roomStore.updateMyBalance(res.data.my_balance)
 			roomStore.updateTableBalance(res.data.table_balance)
+    prependHistoryAmount(historyBetAmounts, amount)
   } catch (error) {
     console.error(error)
     // 错误已处理
@@ -685,6 +694,7 @@ const handleWithdraw = async () => {
     return
   }
 
+  const amount = withdrawAmount.value
   withdrawLoading.value = true
   try {
 			const res = await roomApi.withdraw(roomId.value, withdrawAmount.value)
@@ -693,6 +703,8 @@ const handleWithdraw = async () => {
     withdrawAmount.value = undefined
 			roomStore.updateMyBalance(res.data.my_balance)
 			roomStore.updateTableBalance(res.data.table_balance)
+    const actualAmount = res.data.actual_amount ?? amount
+    prependHistoryAmount(historyWithdrawAmounts, actualAmount)
   } catch (error) {
     console.error(error)
     // 错误已处理
@@ -711,6 +723,7 @@ const handleWithdrawAll = async () => {
     withdrawAmount.value = undefined
 			roomStore.updateMyBalance(res.data.my_balance)
 			roomStore.updateTableBalance(res.data.table_balance)
+    prependHistoryAmount(historyWithdrawAmounts, res.data.actual_amount)
   } catch (error) {
     console.error(error)
     // 错误已处理
