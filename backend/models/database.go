@@ -14,7 +14,7 @@ var DB *gorm.DB
 // InitDatabase 初始化数据库连接
 func InitDatabase(dbPath string, maxIdleConns, maxOpenConns int, connMaxLifetime time.Duration) error {
 	var err error
-	
+
 	// 打开数据库连接
 	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Info), // 设置日志级别
@@ -85,8 +85,8 @@ func initAdminUser() error {
 
 	// 导入密码加密工具
 	// 这里直接使用bcrypt加密，避免循环依赖
-	passwordHash := "$2a$10$N9qo8uLOickgx2ZMRZoMyeIjZAgcfl7p92ldGxad68LJZdL17lhWy" // admin123
-	
+	passwordHash := "$2a$10$4wXVwkYAv50vhrkJs4acCO1VYMjvePZPySNDltOBHHGWr2AZ0nnIa" // admin123
+
 	// 创建默认管理员账户
 	admin := User{
 		Phone:        "13800138000",
@@ -112,4 +112,3 @@ func CloseDatabase() error {
 	}
 	return sqlDB.Close()
 }
-
