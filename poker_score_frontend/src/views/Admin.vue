@@ -222,26 +222,45 @@
 
           <div class="detail-section">
             <div class="detail-section-title">最近操作</div>
-            <div v-if="!dissolvedRoomDetail.operations || !dissolvedRoomDetail.operations.length" class="detail-empty">
-              暂无操作记录
+            <div v-if="dissolvedRoomOperationsLoading" class="detail-loading detail-loading-inline">
+              <a-spin />
             </div>
-            <div v-else class="detail-operations">
-              <div
-                v-for="op in dissolvedRoomDetail.operations"
-                :key="op.id"
-                class="detail-operation-item"
-              >
-                <div class="detail-operation-header">
-                  <span class="detail-operation-user">{{ op.nickname || `用户${op.user_id}` }}</span>
-                  <span class="detail-operation-time">{{ formatDateTime(op.created_at) }}</span>
-                </div>
-                <div class="detail-operation-desc">
-                  <span class="detail-operation-type">{{ renderOperationType(op.operation_type) }}</span>
-                  <span class="detail-operation-description">{{ op.description }}</span>
-                  <span v-if="typeof op.amount === 'number'" class="detail-operation-amount">金额：{{ op.amount }}</span>
-                </div>
+            <template v-else>
+              <div v-if="!dissolvedRoomOperations?.list?.length" class="detail-empty">
+                暂无操作记录
               </div>
-            </div>
+              <div v-else>
+                <div class="detail-operations">
+                  <div
+                    v-for="op in dissolvedRoomOperations.list"
+                    :key="op.id"
+                    class="detail-operation-item"
+                  >
+                    <div class="detail-operation-header">
+                      <span class="detail-operation-user">{{ op.nickname || `用户${op.user_id}` }}</span>
+                      <span class="detail-operation-time">{{ formatDateTime(op.created_at) }}</span>
+                    </div>
+                    <div class="detail-operation-desc">
+                      <span class="detail-operation-type">{{ renderOperationType(op.operation_type) }}</span>
+                      <span class="detail-operation-description">{{ op.description }}</span>
+                      <span v-if="typeof op.amount === 'number'" class="detail-operation-amount">金额：{{ op.amount }}</span>
+                    </div>
+                  </div>
+                </div>
+                <a-pagination
+                  v-model:current="dissolvedRoomDetailOperationsPage"
+                  v-model:page-size="dissolvedRoomDetailOperationsPageSize"
+                  :total="dissolvedRoomDetailOperationsTotal"
+                  :show-size-changer="true"
+                  :page-size-options="['10', '20', '30', '50', '100', '200']"
+                  :hide-on-single-page="true"
+                  size="small"
+                  show-less-items
+                  style="margin-top: 12px; text-align: right"
+                  @change="handleOperationsPageChange"
+                />
+              </div>
+            </template>
           </div>
         </div>
         <div v-else class="detail-empty">暂无数据</div>
@@ -295,6 +314,7 @@ const resetEditUserForm = () => {
 }
 
 // 房间管理
+const DEFAULT_OPERATION_PAGE_SIZE = 20
 const rooms = ref<any[]>([])
 const roomsPage = ref(1)
 const roomsPageSize = ref(20)
@@ -304,12 +324,30 @@ const roomsLoading = ref(false)
 const dissolvedRoomDetailVisible = ref(false)
 const dissolvedRoomDetailLoading = ref(false)
 const dissolvedRoomDetail = ref<any | null>(null)
+const dissolvedRoomDetailRoomId = ref<number | null>(null)
+const dissolvedRoomDetailOperationsPage = ref(1)
+const dissolvedRoomDetailOperationsPageSize = ref(DEFAULT_OPERATION_PAGE_SIZE)
+const dissolvedRoomDetailOperationsTotal = ref(0)
+const dissolvedRoomOperationsLoading = ref(false)
 
 const dissolvedRoomModalTitle = computed(() => {
   if (dissolvedRoomDetail.value?.room?.room_code) {
     return `房间 ${dissolvedRoomDetail.value.room.room_code}`
   }
   return '房间详情'
+})
+
+const dissolvedRoomOperations = computed(() => {
+  const operations = dissolvedRoomDetail.value?.operations
+  if (Array.isArray(operations)) {
+    return {
+      list: operations,
+      total: operations.length,
+      page: dissolvedRoomDetailOperationsPage.value,
+      page_size: dissolvedRoomDetailOperationsPageSize.value
+    }
+  }
+  return operations || null
 })
 
 // 操作记录
@@ -409,6 +447,19 @@ const renderDescription = (record: any) => {
     }
   }
   return record?.description || '-'
+}
+
+const resetDissolvedRoomOperations = () => {
+  dissolvedRoomDetailOperationsPage.value = 1
+  dissolvedRoomDetailOperationsPageSize.value = DEFAULT_OPERATION_PAGE_SIZE
+  dissolvedRoomDetailOperationsTotal.value = 0
+  dissolvedRoomOperationsLoading.value = false
+}
+
+const resetDissolvedRoomDetailState = () => {
+  dissolvedRoomDetail.value = null
+  dissolvedRoomDetailRoomId.value = null
+  resetDissolvedRoomOperations()
 }
 
 // 加载用户列表
@@ -528,22 +579,67 @@ const viewRoomDetail = (room: any) => {
     return
   }
 
+  resetDissolvedRoomDetailState()
+  dissolvedRoomDetailRoomId.value = room.id
   dissolvedRoomDetailVisible.value = true
   dissolvedRoomDetailLoading.value = true
-  dissolvedRoomDetail.value = null
   loadDissolvedRoomDetail(room.id)
 }
 
-const loadDissolvedRoomDetail = async (roomId: number) => {
-  dissolvedRoomDetailLoading.value = true
+const loadDissolvedRoomDetail = async (roomId: number, options?: { onlyOperations?: boolean }) => {
+  const onlyOperations = options?.onlyOperations === true
+
+  if (onlyOperations) {
+    dissolvedRoomOperationsLoading.value = true
+  } else {
+    dissolvedRoomDetailLoading.value = true
+  }
+
   try {
-    const res = await adminApi.getRoomDetails(roomId)
-    dissolvedRoomDetail.value = res.data
+    const res = await adminApi.getRoomDetails(roomId, {
+      op_page: dissolvedRoomDetailOperationsPage.value,
+      op_page_size: dissolvedRoomDetailOperationsPageSize.value
+    })
+
+    const detail = res.data ?? {}
+
+    if (Array.isArray(detail.operations)) {
+      detail.operations = {
+        list: detail.operations,
+        total: detail.operations.length,
+        page: dissolvedRoomDetailOperationsPage.value,
+        page_size: dissolvedRoomDetailOperationsPageSize.value
+      }
+    }
+
+    dissolvedRoomDetail.value = detail
+
+    const operations = detail.operations || {}
+    const total =
+      typeof operations.total === 'number'
+        ? operations.total
+        : Array.isArray(operations.list)
+        ? operations.list.length
+        : 0
+    dissolvedRoomDetailOperationsTotal.value = total
+
+    if (typeof operations.page === 'number' && operations.page > 0) {
+      dissolvedRoomDetailOperationsPage.value = operations.page
+    }
+    if (typeof operations.page_size === 'number' && operations.page_size > 0) {
+      dissolvedRoomDetailOperationsPageSize.value = operations.page_size
+    }
   } catch (error) {
     message.error('加载房间详情失败')
-    dissolvedRoomDetailVisible.value = false
+    if (!onlyOperations) {
+      dissolvedRoomDetailVisible.value = false
+    }
   } finally {
-    dissolvedRoomDetailLoading.value = false
+    if (onlyOperations) {
+      dissolvedRoomOperationsLoading.value = false
+    } else {
+      dissolvedRoomDetailLoading.value = false
+    }
   }
 }
 
@@ -552,7 +648,25 @@ const handleCloseDissolvedDetail = () => {
     return
   }
   dissolvedRoomDetailVisible.value = false
-  dissolvedRoomDetail.value = null
+  resetDissolvedRoomDetailState()
+}
+
+const handleOperationsPageChange = (page: number, pageSize: number) => {
+  const targetPage = page > 0 ? page : 1
+  const targetPageSize = pageSize > 0 ? pageSize : DEFAULT_OPERATION_PAGE_SIZE
+
+  const shouldFetch =
+    targetPage !== dissolvedRoomDetailOperationsPage.value ||
+    targetPageSize !== dissolvedRoomDetailOperationsPageSize.value
+
+  dissolvedRoomDetailOperationsPage.value = targetPage
+  dissolvedRoomDetailOperationsPageSize.value = targetPageSize
+
+  if (!shouldFetch || dissolvedRoomDetailRoomId.value === null) {
+    return
+  }
+
+  loadDissolvedRoomDetail(dissolvedRoomDetailRoomId.value, { onlyOperations: true })
 }
 
 onMounted(() => {
@@ -675,6 +789,10 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   padding: 40px 0;
+}
+
+.detail-loading-inline {
+  padding: 24px 0;
 }
 
 .detail-content {

@@ -178,7 +178,15 @@ func (s *AdminService) GetRooms(status string, page, pageSize int) ([]map[string
 }
 
 // GetRoomDetails 获取房间详细信息
-func (s *AdminService) GetRoomDetails(roomID uint) (map[string]interface{}, error) {
+func (s *AdminService) GetRoomDetails(roomID uint, opPage, opPageSize int) (map[string]interface{}, error) {
+	if opPage <= 0 {
+		opPage = 1
+	}
+	if opPageSize <= 0 {
+		opPageSize = 20
+	} else if opPageSize > 200 {
+		opPageSize = 200
+	}
 	// 查询房间信息
 	var room models.Room
 	err := models.DB.First(&room, roomID).Error
@@ -219,9 +227,21 @@ func (s *AdminService) GetRoomDetails(roomID uint) (map[string]interface{}, erro
 		})
 	}
 
-	// 查询操作记录（最近100条）
-	var operations []models.RoomOperation
-	models.DB.Where("room_id = ?", roomID).Order("created_at DESC").Limit(100).Find(&operations)
+	// 查询操作记录（分页）
+	var (
+		operations       []models.RoomOperation
+		totalOperations  int64
+		operationRecords = models.DB.Model(&models.RoomOperation{}).Where("room_id = ?", roomID)
+	)
+
+	if err := operationRecords.Count(&totalOperations).Error; err != nil {
+		return nil, err
+	}
+
+	offset := (opPage - 1) * opPageSize
+	if err := operationRecords.Order("created_at DESC").Offset(offset).Limit(opPageSize).Find(&operations).Error; err != nil {
+		return nil, err
+	}
 
 	operationList := make([]map[string]interface{}, 0, len(operations))
 	for _, op := range operations {
@@ -244,7 +264,7 @@ func (s *AdminService) GetRoomDetails(roomID uint) (map[string]interface{}, erro
 		operationList = append(operationList, opMap)
 	}
 
-	return map[string]interface{}{
+	result := map[string]interface{}{
 		"room": map[string]interface{}{
 			"id":            room.ID,
 			"room_code":     room.RoomCode,
@@ -254,11 +274,18 @@ func (s *AdminService) GetRoomDetails(roomID uint) (map[string]interface{}, erro
 			"dissolved_at":  room.DissolvedAt,
 			"table_balance": tableBalance,
 		},
-		"members":    memberList,
-		"operations": operationList,
+		"members": memberList,
+		"operations": map[string]interface{}{
+			"list":      operationList,
+			"total":     totalOperations,
+			"page":      opPage,
+			"page_size": opPageSize,
+		},
 		// 为兼容历史调用保留独立字段，便于前端直接取用
 		"table_balance": tableBalance,
-	}, nil
+	}
+
+	return result, nil
 }
 
 // GetUserSettlements 获取用户历史盈亏

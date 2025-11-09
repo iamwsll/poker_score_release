@@ -405,7 +405,7 @@
 - `/admin/users`：分页返回所有用户，结构与 `models.User` 对应，包含 `updated_at`
 - `PUT /admin/users/:user_id`：更新指定用户的角色、手机、昵称，可选传入 `password` 修改密码（留空则不变），手机号需唯一、密码至少 6 位
 - `/admin/rooms`：分页返回房间列表，附带 `member_count`、`online_count`
-- `/admin/rooms/:room_id`：返回房间详情、成员列表（按 `joined_at DESC`）以及最近 100 条操作
+- `/admin/rooms/:room_id`：返回房间详情、成员列表（按 `joined_at DESC`）以及可分页的操作记录（按 `created_at DESC`）。支持 `op_page` 与 `op_page_size` 查询参数，默认分别为 `1` 和 `20`。
 - `/admin/users/:user_id/settlements`：按照时间范围过滤结算记录，并汇总 `total_chip` 和 `total_rmb`
 - `/admin/room-member-history`：支持 `user_id`、`room_id` 过滤，`duration_minutes` 只有当 `left_at` 不为空时才会计算
 

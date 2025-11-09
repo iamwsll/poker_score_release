@@ -16,8 +16,8 @@ export function getRooms(status = 'all', page = 1, pageSize = 20) {
 }
 
 // 获取房间详情
-export function getRoomDetails(roomId: number) {
-  return get(`/admin/rooms/${roomId}`)
+export function getRoomDetails(roomId: number, params?: { op_page?: number; op_page_size?: number }) {
+  return get(`/admin/rooms/${roomId}`, { params })
 }
 
 // 获取用户历史盈亏

@@ -146,8 +146,23 @@ func (ctrl *AdminController) GetRoomDetails(c *gin.Context) {
 		return
 	}
 
+	opPageStr := c.DefaultQuery("op_page", "1")
+	opPageSizeStr := c.DefaultQuery("op_page_size", "20")
+
+	opPage, err := strconv.Atoi(opPageStr)
+	if err != nil || opPage <= 0 {
+		utils.BadRequest(c, "操作记录页码格式错误")
+		return
+	}
+
+	opPageSize, err := strconv.Atoi(opPageSizeStr)
+	if err != nil || opPageSize <= 0 {
+		utils.BadRequest(c, "操作记录分页大小格式错误")
+		return
+	}
+
 	// 查询房间详情
-	details, err := ctrl.adminService.GetRoomDetails(uint(roomID))
+	details, err := ctrl.adminService.GetRoomDetails(uint(roomID), opPage, opPageSize)
 	if err != nil {
 		utils.NotFound(c, "房间不存在")
 		return
