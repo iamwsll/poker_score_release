@@ -260,7 +260,7 @@
           积分强制转移
         </a-button>
         <a-button block size="large" @click="handleKickUser">
-          有人走了？
+          踢出用户
         </a-button>
         <a-button block size="large" type="primary" danger @click="handleDissolveRoom">
           解散房间
