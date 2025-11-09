@@ -378,6 +378,10 @@ const settlementPlan = ref<SettlementPlanItem[]>([])
 const initiatedByMe = ref(false)
 const settlementConfirmed = ref(false)
 const confirmedInfo = ref<{ nickname: string; confirmed_at: string } | null>(null)
+const dismissedSettlementKey = ref<string | null>(null)
+
+const getSettlementKey = (context: SettlementContext) =>
+  `${context.initiated_by}-${context.initiated_at}`
 
 // 计算属性：排序后的成员列表
 const sortedMembers = computed(() => {
@@ -431,6 +435,11 @@ watch(
   settlementContext,
   (context) => {
     if (context) {
+      const key = getSettlementKey(context)
+      if (dismissedSettlementKey.value && dismissedSettlementKey.value !== key) {
+        dismissedSettlementKey.value = null
+      }
+
       settlementPlan.value = context.settlement_plan ?? []
       initiatedByMe.value = context.initiated_by === (userStore.user?.id ?? 0)
       settlementConfirmed.value = context.confirmed ?? false
@@ -440,7 +449,11 @@ watch(
             confirmed_at: context.confirmed_at ?? context.initiated_at,
           }
         : null
-      showSettlementPlanModal.value = true
+
+      const suppressed = dismissedSettlementKey.value === key && !settlementConfirmed.value
+      if (!suppressed) {
+        showSettlementPlanModal.value = true
+      }
     } else {
       settlementPlan.value = []
       initiatedByMe.value = false
@@ -456,9 +469,15 @@ watch(
 
 watch(
   () => showSettlementPlanModal.value,
-  (open) => {
-    if (!open && settlementContext.value) {
-      roomStore.setSettlementContext(null)
+  (open, wasOpen) => {
+    if (!open && wasOpen) {
+      const context = settlementContext.value
+      if (context) {
+        dismissedSettlementKey.value = getSettlementKey(context)
+        roomStore.setSettlementContext(null)
+      } else {
+        dismissedSettlementKey.value = null
+      }
     }
   }
 )
