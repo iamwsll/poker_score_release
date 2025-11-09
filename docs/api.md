@@ -193,7 +193,7 @@
 - `room_type` 仅允许 `texas` 或 `niuniu`
 - `chip_rate` 是“积分:人民币”的字符串，如 `20:1`
 - `members[].status` 可能为 `online`、`offline`
-- 离线或被踢出的成员仍然留在房间列表中，`left_at` 字段目前不会被写入
+- 离线或被踢出的成员仍然留在房间列表中，通过 `status` 字段区分在线/离线状态
 - `LeaveRoom` 与 `KickUser` 只改变状态，不会删除 `room_members` 记录
 - 任何成员都可以调用踢人接口，服务端未限制房主
 
@@ -291,7 +291,7 @@
 
 调用方需要同时满足：
 
-- 仍在房间中（`room_members.left_at IS NULL`）
+- 仍在房间中（房间成员记录仍存在，且房间未解散）
 - 当前桌面存在可转移的积分
 - 目标用户仍在房间中
 
@@ -394,7 +394,7 @@
 
 - 若不传时间参数，服务端自动计算“今天 7:00 到明天 7:00”（早于 7:00 则取昨日 7:00 至今日 7:00）
 - 采用 BFS 扩散查找在时间段内与我同桌的所有好友，再统计结算记录
-- `current_rooms`：当前仍在线的房间列表（`room_members.left_at` 为空且房间状态为 `active`）
+- `current_rooms`：当前仍有成员记录的房间列表（房间状态为 `active`）
 - `friends_records`：包含 `user_id`、`nickname`、`total_chip`、`total_rmb`、`is_me`
 - `total_check`：所有好友人民币盈亏求和（用于校验是否为 0，可能出现浮点误差）
 
@@ -407,13 +407,13 @@
 - `/admin/rooms`：分页返回房间列表，附带 `member_count`、`online_count`
 - `/admin/rooms/:room_id`：返回房间详情、成员列表（按 `joined_at DESC`）以及可分页的操作记录（按 `created_at DESC`）。支持 `op_page` 与 `op_page_size` 查询参数，默认分别为 `1` 和 `20`。
 - `/admin/users/:user_id/settlements`：按照时间范围过滤结算记录，并汇总 `total_chip` 和 `total_rmb`
-- `/admin/room-member-history`：支持 `user_id`、`room_id` 过滤，`duration_minutes` 只有当 `left_at` 不为空时才会计算
+- `/admin/room-member-history`：支持 `user_id`、`room_id` 过滤，结果基于房间操作记录汇总
 
 ## 7. WebSocket
 
 - URL：`ws://localhost:8080/api/ws/room/:room_id`
 - 认证：与 REST 接口相同，通过 Cookie 验证 Session
-- 限制：只有当前仍在房间（`room_members.left_at IS NULL`）的用户才能建立连接
+- 限制：只有仍有房间成员记录的用户才能建立连接
 - 心跳：服务端每 ~54 秒发送一次 Ping 帧；客户端可定期发送 `{"type":"ping"}`，服务端会回复 `{"type":"pong"}`
 - 断线：连接关闭后会把该成员状态置为 `offline`
 
@@ -421,7 +421,7 @@
 
 ```json
 { "type": "user_joined", "data": { "user_id": 18, "nickname": "测试用户3", "balance": 0, "status": "online", "joined_at": "2025-11-07T05:52:24.220433Z" } }
-{ "type": "user_left", "data": { "user_id": 18, "nickname": "测试用户3", "status": "offline", "left_at": "2025-11-07T05:55:24Z" } }
+{ "type": "user_left", "data": { "user_id": 18, "nickname": "测试用户3", "status": "offline", "occurred_at": "2025-11-07T05:55:24Z" } }
 { "type": "user_kicked", "data": { "user_id": 18, "nickname": "测试用户3", "kicked_by": 16, "kicked_by_nickname": "测试用户1", "status": "offline", "kicked_at": "2025-11-07T05:56:36Z" } }
 { "type": "bet", "data": { "user_id": 16, "nickname": "测试用户1", "amount": 100, "balance": -100, "table_balance": 100, "created_at": "2025-11-07T05:52:30Z" } }
 { "type": "withdraw", "data": { "user_id": 16, "nickname": "测试用户1", "amount": 150, "balance": 0, "table_balance": 0, "created_at": "2025-11-07T05:52:40Z" } }
@@ -454,7 +454,6 @@
 
 1. 所有余额相关操作均包裹在数据库事务中，确保原子性与一致性。
 2. `user_balances` 记录不会被删除；结算后统一重置为 0。
-3. `room_members.left_at` 当前未被写入，暂依靠 `status` 区分 `online/offline`（踢出事件会单独通知，状态同 `offline`）。
 4. Session 有效期较长（10 年），如需手动失效可删除 `sessions` 表记录。
 5. 服务端日志使用标准库 `log` 输出到控制台。
 6. WebSocket 广播采用房间级 Hub，消息在同一连接上使用换行符分隔多条 JSON。

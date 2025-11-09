@@ -157,13 +157,13 @@ func (s *OperationService) ForceTransfer(roomID, userID, targetUserID uint) (int
 	err := models.DB.Transaction(func(tx *gorm.DB) error {
 		// 检查操作者是否在房间中
 		var actorMember models.RoomMember
-		if err := tx.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&actorMember).Error; err != nil {
+		if err := tx.Where("room_id = ? AND user_id = ?", roomID, userID).First(&actorMember).Error; err != nil {
 			return errors.New("您不在该房间中")
 		}
 
 		// 检查目标用户是否在房间中
 		var targetMember models.RoomMember
-		if err := tx.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, targetUserID).First(&targetMember).Error; err != nil {
+		if err := tx.Where("room_id = ? AND user_id = ?", roomID, targetUserID).First(&targetMember).Error; err != nil {
 			return errors.New("目标用户不在房间中")
 		}
 

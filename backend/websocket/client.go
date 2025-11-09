@@ -54,7 +54,7 @@ func (c *Client) readPump() {
 
 		// 将用户标记为离线状态，但保留房间成员身份
 		res := models.DB.Model(&models.RoomMember{}).
-			Where("room_id = ? AND user_id = ? AND left_at IS NULL", c.RoomID, c.UserID).
+			Where("room_id = ? AND user_id = ?", c.RoomID, c.UserID).
 			Update("status", "offline")
 
 		if res.Error != nil {
@@ -140,7 +140,7 @@ func (c *Client) writePump() {
 func ServeWs(hub *Hub, conn *websocket.Conn, userID, roomID uint) {
 	// 确保成员状态为在线
 	if err := models.DB.Model(&models.RoomMember{}).
-		Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).
+		Where("room_id = ? AND user_id = ?", roomID, userID).
 		Update("status", "online").Error; err != nil {
 		log.Printf("更新成员在线状态失败: RoomID=%d, UserID=%d, %v", roomID, userID, err)
 	}

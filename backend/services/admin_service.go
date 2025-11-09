@@ -223,7 +223,6 @@ func (s *AdminService) GetRoomDetails(roomID uint, opPage, opPageSize int) (map[
 			"balance":   balanceAmount,
 			"status":    member.Status,
 			"joined_at": member.JoinedAt,
-			"left_at":   member.LeftAt,
 		})
 	}
 

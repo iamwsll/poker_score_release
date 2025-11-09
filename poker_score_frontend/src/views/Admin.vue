@@ -204,7 +204,6 @@
                 <span>积分</span>
                 <span>状态</span>
                 <span>加入时间</span>
-                <span>离开时间</span>
               </div>
               <div
                 v-for="member in dissolvedRoomDetail.members"
@@ -215,7 +214,6 @@
                 <span>{{ member.balance ?? 0 }}</span>
                 <span>{{ member.status === 'online' ? '在线' : '离线' }}</span>
                 <span>{{ member.joined_at ? formatDateTime(member.joined_at) : '-' }}</span>
-                <span>{{ member.left_at ? formatDateTime(member.left_at) : '-' }}</span>
               </div>
             </div>
           </div>

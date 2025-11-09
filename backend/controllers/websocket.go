@@ -52,7 +52,7 @@ func (ctrl *WebSocketController) HandleWebSocket(c *gin.Context) {
 
 	// 检查用户是否在房间中
 	var member models.RoomMember
-	err = models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error
+	err = models.DB.Where("room_id = ? AND user_id = ?", roomID, userID).First(&member).Error
 	if err != nil {
 		utils.BadRequest(c, "您不在该房间中")
 		return
@@ -75,4 +75,3 @@ func (ctrl *WebSocketController) HandleWebSocket(c *gin.Context) {
 func (ctrl *WebSocketController) GetHub() *ws.Hub {
 	return ctrl.hub
 }
-

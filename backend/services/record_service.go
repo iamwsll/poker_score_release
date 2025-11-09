@@ -101,7 +101,7 @@ func (s *RecordService) GetTonightRecords(userID uint, startTime, endTime *time.
 	activeQueryIDs := buildIDList(friendSet)
 	if len(activeQueryIDs) > 0 {
 		var activeMembers []models.RoomMember
-		if err := models.DB.Where("user_id IN ? AND left_at IS NULL", activeQueryIDs).
+		if err := models.DB.Where("user_id IN ?", activeQueryIDs).
 			Find(&activeMembers).Error; err != nil {
 			return nil, err
 		}
@@ -220,7 +220,7 @@ func (s *RecordService) GetTonightRecords(userID uint, startTime, endTime *time.
 
 	// 查询用户当前在的房间
 	var currentRoomMembers []models.RoomMember
-	models.DB.Where("user_id = ? AND left_at IS NULL", userID).Find(&currentRoomMembers)
+	models.DB.Where("user_id = ?", userID).Find(&currentRoomMembers)
 
 	currentRooms := make([]map[string]interface{}, 0, len(currentRoomMembers))
 	for _, member := range currentRoomMembers {

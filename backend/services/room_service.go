@@ -126,9 +126,9 @@ func (s *RoomService) JoinRoom(userID, roomID uint) (*models.RoomMember, error) 
 		return nil, errors.New("房间已解散")
 	}
 
-	// 检查用户是否已在房间中（left_at为NULL）
+	// 检查用户是否已在房间中
 	var existingMember models.RoomMember
-	err = models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&existingMember).Error
+	err = models.DB.Where("room_id = ? AND user_id = ?", roomID, userID).First(&existingMember).Error
 	if err == nil {
 		// 用户已在房间中
 		return &existingMember, nil
@@ -186,7 +186,7 @@ func (s *RoomService) JoinRoomByCode(userID uint, roomCode string) (*models.Room
 func (s *RoomService) LeaveRoom(userID, roomID uint) error {
 	// 查找用户的在线成员记录
 	var member models.RoomMember
-	err := models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error
+	err := models.DB.Where("room_id = ? AND user_id = ?", roomID, userID).First(&member).Error
 	if err != nil {
 		return errors.New("您不在该房间中")
 	}
@@ -214,7 +214,7 @@ func (s *RoomService) LeaveRoom(userID, roomID uint) error {
 func (s *RoomService) KickUser(roomID, userID, targetUserID uint) error {
 	// 检查目标用户是否在房间中
 	var member models.RoomMember
-	err := models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, targetUserID).First(&member).Error
+	err := models.DB.Where("room_id = ? AND user_id = ?", roomID, targetUserID).First(&member).Error
 	if err != nil {
 		return errors.New("目标用户不在房间中")
 	}
@@ -247,7 +247,7 @@ func (s *RoomService) KickUser(roomID, userID, targetUserID uint) error {
 // EnsureActiveMember 确保用户仍在房间中
 func (s *RoomService) EnsureActiveMember(roomID, userID uint) error {
 	var member models.RoomMember
-	err := models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error
+	err := models.DB.Where("room_id = ? AND user_id = ?", roomID, userID).First(&member).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return errors.New("您不在该房间中")
@@ -275,7 +275,7 @@ func (s *RoomService) ManualDissolveRoom(roomID, userID uint) (time.Time, error)
 		}
 
 		var member models.RoomMember
-		if err := tx.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error; err != nil {
+		if err := tx.Where("room_id = ? AND user_id = ?", roomID, userID).First(&member).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return errors.New("您不在该房间中")
 			}
@@ -302,11 +302,8 @@ func (s *RoomService) ManualDissolveRoom(roomID, userID uint) (time.Time, error)
 		}
 
 		if err := tx.Model(&models.RoomMember{}).
-			Where("room_id = ? AND left_at IS NULL", roomID).
-			Updates(map[string]interface{}{
-				"status":  "offline",
-				"left_at": now,
-			}).Error; err != nil {
+			Where("room_id = ?", roomID).
+			Update("status", "offline").Error; err != nil {
 			return err
 		}
 
@@ -339,8 +336,8 @@ func (s *RoomService) GetRoomDetails(roomID, userID uint) (map[string]interface{
 
 	// 检查用户是否在房间中
 	var member models.RoomMember
-	// left_at 仍作为“是否仍在房间中”的标识字段（未设置 left_at 表示成员仍被视为当前成员）
-	err = models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error
+	// 成员记录存在即可视为房间成员（status 记录在线状态）
+	err = models.DB.Where("room_id = ? AND user_id = ?", roomID, userID).First(&member).Error
 	if err != nil {
 		return nil, errors.New("您不在该房间中")
 	}
@@ -377,7 +374,7 @@ func (s *RoomService) GetRoomDetails(roomID, userID uint) (map[string]interface{
 func (s *RoomService) GetRoomMembers(roomID uint) ([]map[string]interface{}, error) {
 	// 查询所有在线成员
 	var members []models.RoomMember
-	err := models.DB.Where("room_id = ? AND left_at IS NULL", roomID).Find(&members).Error
+	err := models.DB.Where("room_id = ?", roomID).Find(&members).Error
 	if err != nil {
 		return nil, err
 	}
@@ -408,7 +405,7 @@ func (s *RoomService) GetRoomMembers(roomID uint) ([]map[string]interface{}, err
 func (s *RoomService) GetLastRoom(userID uint) (*models.Room, error) {
 	// 查询用户最后加入的房间成员记录
 	var member models.RoomMember
-	err := models.DB.Where("user_id = ? AND left_at IS NULL", userID).
+	err := models.DB.Where("user_id = ?", userID).
 		Order("joined_at DESC").
 		First(&member).Error
 
@@ -444,7 +441,7 @@ func (s *RoomService) GetLastRoom(userID uint) (*models.Room, error) {
 // ReturnToRoom 通过房间ID将用户标记为返回房间
 func (s *RoomService) ReturnToRoom(roomID, userID uint) (*models.RoomOperation, error) {
 	var member models.RoomMember
-	err := models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error
+	err := models.DB.Where("room_id = ? AND user_id = ?", roomID, userID).First(&member).Error
 	if err != nil {
 		return nil, errors.New("您不在该房间中")
 	}
@@ -1005,7 +1002,7 @@ func (s *RoomService) broadcastForceTransfer(roomID, userID, targetUserID uint, 
 	s.hub.BroadcastToRoom(roomID, payload)
 }
 
-func (s *RoomService) broadcastUserLeft(roomID, userID uint, status string, leftAt time.Time) {
+func (s *RoomService) broadcastUserLeft(roomID, userID uint, status string, occurredAt time.Time) {
 	if s.hub == nil {
 		return
 	}
@@ -1019,10 +1016,10 @@ func (s *RoomService) broadcastUserLeft(roomID, userID uint, status string, left
 	message := ws.Message{
 		Type: "user_left",
 		Data: map[string]interface{}{
-			"user_id":  user.ID,
-			"nickname": user.Nickname,
-			"status":   status,
-			"left_at":  leftAt.Format(time.RFC3339),
+			"user_id":     user.ID,
+			"nickname":    user.Nickname,
+			"status":      status,
+			"occurred_at": occurredAt.Format(time.RFC3339),
 		},
 	}
 

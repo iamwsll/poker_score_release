@@ -461,7 +461,7 @@ export const useRoomStore = defineStore('room', () => {
           nickname: message.data.nickname,
           operation_type: 'leave',
           description: '离开了房间',
-          created_at: message.data.left_at,
+          created_at: message.data.occurred_at ?? new Date().toISOString(),
         })
         break
       }
