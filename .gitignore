@@ -44,3 +44,6 @@ build/
 
 # 测试报告文件
 docs/test_report.md
+
+# 部署脚本
+deploy.sh

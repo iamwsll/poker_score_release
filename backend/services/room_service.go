@@ -326,6 +326,10 @@ func (s *RoomService) GetLastRoom(userID uint) (*models.Room, error) {
 		return nil, errors.New("没有找到上次加入的房间")
 	}
 
+	if member.Status == "kicked" {
+		return nil, errors.New("您已被移出房间")
+	}
+
 	// 查询房间信息
 	var room models.Room
 	err = models.DB.First(&room, member.RoomID).Error
@@ -338,7 +342,46 @@ func (s *RoomService) GetLastRoom(userID uint) (*models.Room, error) {
 		return nil, errors.New("房间已解散")
 	}
 
+	operation, err := s.markUserReturned(&member)
+	if err != nil {
+		log.Printf("记录用户返回房间失败: RoomID=%d, UserID=%d, %v", member.RoomID, userID, err)
+		return nil, err
+	}
+
+	if operation != nil {
+		s.broadcastUserReturned(member.RoomID, userID, operation.CreatedAt)
+	}
+
 	return &room, nil
+}
+
+func (s *RoomService) markUserReturned(member *models.RoomMember) (*models.RoomOperation, error) {
+	var operation *models.RoomOperation
+
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&models.RoomMember{}).
+			Where("id = ?", member.ID).
+			Update("status", "online")
+		if res.Error != nil {
+			return res.Error
+		}
+		if res.RowsAffected == 0 {
+			return errors.New("您不在该房间中")
+		}
+
+		op, err := s.recordOperationWithDB(tx, member.RoomID, member.UserID, models.OpTypeReturn, nil, nil, "返回了房间")
+		if err != nil {
+			return err
+		}
+		operation = op
+		return nil
+	})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return operation, nil
 }
 
 // initUserBalance 初始化用户积分余额
@@ -566,6 +609,44 @@ func (s *RoomService) broadcastUserJoined(roomID, userID uint, joinedAt time.Tim
 	}
 
 	log.Printf("广播用户加入: RoomID=%d, UserID=%d", roomID, userID)
+	s.hub.BroadcastToRoom(roomID, payload)
+}
+
+func (s *RoomService) broadcastUserReturned(roomID, userID uint, returnedAt time.Time) {
+	if s.hub == nil {
+		return
+	}
+
+	var user models.User
+	if err := models.DB.First(&user, userID).Error; err != nil {
+		log.Printf("广播用户返回时获取用户信息失败: RoomID=%d, UserID=%d, %v", roomID, userID, err)
+		return
+	}
+
+	balance, err := s.GetUserBalance(roomID, userID)
+	if err != nil {
+		log.Printf("广播用户返回时获取用户积分失败: RoomID=%d, UserID=%d, %v", roomID, userID, err)
+		balance = 0
+	}
+
+	message := ws.Message{
+		Type: "user_returned",
+		Data: map[string]interface{}{
+			"user_id":     user.ID,
+			"nickname":    user.Nickname,
+			"balance":     balance,
+			"status":      "online",
+			"returned_at": returnedAt.Format(time.RFC3339),
+		},
+	}
+
+	payload, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("序列化用户返回消息失败: RoomID=%d, UserID=%d, %v", roomID, userID, err)
+		return
+	}
+
+	log.Printf("广播用户返回: RoomID=%d, UserID=%d", roomID, userID)
 	s.hub.BroadcastToRoom(roomID, payload)
 }
 
