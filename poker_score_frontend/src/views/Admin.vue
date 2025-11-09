@@ -76,7 +76,7 @@
                   </a-tag>
                 </div>
                 <div class="room-info">
-                  <div>类型: {{ room.room_type === 'texas' ? '德扑' : '牛牛' }}</div>
+                  <div>类型: {{ room.room_type === 'texas' ? '单记分' : '多计分' }}</div>
                   <div>比例: {{ room.chip_rate }}</div>
                   <div>创建者: {{ room.creator_nickname }}</div>
                   <div>成员数: {{ room.member_count }} (在线: {{ room.online_count }})</div>

@@ -1,7 +1,7 @@
 <template>
   <div class="home-container">
     <div class="header">
-      <h1 class="title">筹码计分器</h1>
+      <h1 class="title">比赛计分器</h1>
       <div class="user-info">
         <span>{{ userStore.user?.nickname }}</span>
       </div>
@@ -49,18 +49,18 @@
       <a-form layout="vertical">
         <a-form-item label="房间类型">
           <a-radio-group v-model:value="createForm.roomType" size="large">
-            <a-radio-button value="texas">德扑房间</a-radio-button>
-            <a-radio-button value="niuniu">牛牛房间</a-radio-button>
+            <a-radio-button value="texas">单计分房间</a-radio-button>
+            <a-radio-button value="niuniu">多计分房间</a-radio-button>
           </a-radio-group>
         </a-form-item>
-        <a-form-item label="积分与人民币比例">
+        <a-form-item label="积分比例">
           <a-input
             v-model:value="createForm.chipRate"
             placeholder="例如: 20:1"
             size="large"
           />
           <div style="margin-top: 8px; color: #999; font-size: 12px">
-            {{ createForm.roomType === 'texas' ? '德扑默认 20:1' : '牛牛默认 1:1' }}
+            {{ createForm.roomType === 'texas' ? '默认 20:1' : '默认 1:1' }}
           </div>
         </a-form-item>
       </a-form>

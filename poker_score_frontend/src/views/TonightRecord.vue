@@ -35,7 +35,7 @@
             @click="handleEnterRoom(room)"
           >
             <span>房间号: {{ room.room_code }}</span>
-            <span class="room-type">{{ room.room_type === 'texas' ? '德扑' : '牛牛' }}</span>
+            <span class="room-type">{{ room.room_type === 'texas' ? '单记分' : '多计分' }}</span>
           </div>
         </div>
       </div>
@@ -47,7 +47,7 @@
           <div class="table-row header-row">
             <div class="cell">昵称</div>
             <div class="cell">积分盈亏</div>
-            <div class="cell">人民币盈亏</div>
+            <div class="cell">实际盈亏</div>
           </div>
           <div
             v-for="record in sortedRecords"
@@ -123,7 +123,7 @@ const getBalanceClass = (value: number) => {
 const setDefaultTime = () => {
   const now = dayjs()
   const hour = now.hour()
-  
+
   let start, end
   if (hour < 7) {
     // 当前时间在7:00am之前，统计昨天7:00am到今天7:00am
@@ -134,7 +134,7 @@ const setDefaultTime = () => {
     start = now.hour(7).minute(0).second(0)
     end = now.add(1, 'day').hour(7).minute(0).second(0)
   }
-  
+
   timeRange.value = [start, end]
   loadRecords()
 }
@@ -147,7 +147,7 @@ const loadRecords = async () => {
       startTime = timeRange.value[0].toISOString()
       endTime = timeRange.value[1].toISOString()
     }
-    
+
     const res = await recordApi.getTonightRecords(startTime, endTime)
     recordData.value = res.data
   } catch (error) {

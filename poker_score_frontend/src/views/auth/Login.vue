@@ -1,7 +1,7 @@
 <template>
   <div class="login-container">
     <div class="login-card">
-      <h1 class="title">筹码计分器</h1>
+      <h1 class="title">比赛计分器</h1>
       <a-form
         :model="formState"
         :rules="rules"
@@ -79,7 +79,7 @@ const handleLogin = async () => {
   try {
     await userStore.login(formState.phone, formState.password)
     message.success('登录成功')
-    
+
     // 如果有重定向地址，跳转到重定向地址，否则跳转到首页
     const redirect = route.query.redirect as string
     router.push(redirect || '/')
