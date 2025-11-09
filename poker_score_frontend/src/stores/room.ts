@@ -313,6 +313,36 @@ export const useRoomStore = defineStore('room', () => {
         })
         break
 
+      case 'user_returned': {
+        const balanceValue =
+          typeof message.data.balance === 'number' ? message.data.balance : undefined
+        const status =
+          typeof message.data.status === 'string' && message.data.status.trim().length > 0
+            ? message.data.status
+            : 'online'
+
+        updateMember({
+          user_id: message.data.user_id,
+          nickname: message.data.nickname,
+          status,
+          ...(balanceValue !== undefined ? { balance: balanceValue } : {}),
+        })
+
+        if (message.data.user_id === userStore.user?.id && balanceValue !== undefined) {
+          updateMyBalance(balanceValue)
+        }
+
+        addOperation({
+          id: Date.now(),
+          user_id: message.data.user_id,
+          nickname: message.data.nickname,
+          operation_type: 'return',
+          description: '返回了房间',
+          created_at: message.data.returned_at ?? new Date().toISOString(),
+        })
+        break
+      }
+
       case 'user_left': {
         // 用户离开通知（保留成员身份）
         const status = typeof message.data.status === 'string' ? message.data.status : 'offline'
@@ -337,7 +367,7 @@ export const useRoomStore = defineStore('room', () => {
         updateMember({
           user_id: message.data.user_id,
           nickname: message.data.nickname,
-          status: typeof message.data.status === 'string' ? message.data.status : 'kicked',
+          status: typeof message.data.status === 'string' ? message.data.status : 'offline',
         })
         addOperation({
           id: Date.now(),
