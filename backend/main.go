@@ -81,6 +81,7 @@ func main() {
 			rooms.POST("/join", roomController.JoinRoom)
 			rooms.GET("/last", roomController.GetLastRoom)
 			rooms.GET("/:room_id", roomController.GetRoomDetails)
+			rooms.POST("/:room_id/return", roomController.ReturnToRoom)
 			rooms.POST("/:room_id/leave", roomController.LeaveRoom)
 			rooms.POST("/:room_id/kick", roomController.KickUser)
 

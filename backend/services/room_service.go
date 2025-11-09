@@ -355,6 +355,31 @@ func (s *RoomService) GetLastRoom(userID uint) (*models.Room, error) {
 	return &room, nil
 }
 
+// ReturnToRoom 通过房间ID将用户标记为返回房间
+func (s *RoomService) ReturnToRoom(roomID, userID uint) (*models.RoomOperation, error) {
+	var member models.RoomMember
+	err := models.DB.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&member).Error
+	if err != nil {
+		return nil, errors.New("您不在该房间中")
+	}
+
+	// 如果已经是在线状态，则无需重复记录
+	if member.Status == "online" {
+		return nil, nil
+	}
+
+	operation, err := s.markUserReturned(&member)
+	if err != nil {
+		return nil, err
+	}
+
+	if operation != nil {
+		s.broadcastUserReturned(roomID, userID, operation.CreatedAt)
+	}
+
+	return operation, nil
+}
+
 func (s *RoomService) markUserReturned(member *models.RoomMember) (*models.RoomOperation, error) {
 	var operation *models.RoomOperation
 

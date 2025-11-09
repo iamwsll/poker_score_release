@@ -32,7 +32,7 @@
             v-for="room in recordData.current_rooms"
             :key="room.room_id"
             class="room-item"
-            @click="router.push(`/room/${room.room_id}`)"
+            @click="handleEnterRoom(room)"
           >
             <span>房间号: {{ room.room_code }}</span>
             <span class="room-type">{{ room.room_type === 'texas' ? '德扑' : '牛牛' }}</span>
@@ -86,12 +86,19 @@ import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { LeftOutlined } from '@ant-design/icons-vue'
 import * as recordApi from '@/api/record'
+import * as roomApi from '@/api/room'
 import dayjs, { Dayjs } from 'dayjs'
 
 const router = useRouter()
 
 const timeRange = ref<[Dayjs, Dayjs]>()
 const recordData = ref<any>(null)
+
+type CurrentRoom = {
+  room_id: number
+  room_code: string
+  room_type: string
+}
 
 // 计算属性：排序后的记录（盈利者在上）
 const sortedRecords = computed(() => {
@@ -145,6 +152,17 @@ const loadRecords = async () => {
     recordData.value = res.data
   } catch (error) {
     message.error('加载战绩失败')
+  }
+}
+
+// 从今晚战绩进入房间
+const handleEnterRoom = async (room: CurrentRoom) => {
+  try {
+    await roomApi.returnToRoom(room.room_id)
+  } catch (error) {
+    console.warn('记录返回房间失败', error)
+  } finally {
+    router.push(`/room/${room.room_id}`)
   }
 }
 

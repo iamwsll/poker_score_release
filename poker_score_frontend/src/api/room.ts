@@ -20,6 +20,11 @@ export function getRoomDetails(roomId: number) {
   return get(`/rooms/${roomId}`)
 }
 
+// 返回房间
+export function returnToRoom(roomId: number) {
+  return post(`/rooms/${roomId}/return`)
+}
+
 // 离开房间
 export function leaveRoom(roomId: number) {
   return post(`/rooms/${roomId}/leave`)

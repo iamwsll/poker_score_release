@@ -131,6 +131,33 @@ func (ctrl *RoomController) GetRoomDetails(c *gin.Context) {
 	utils.Success(c, details)
 }
 
+// ReturnToRoom 返回房间
+func (ctrl *RoomController) ReturnToRoom(c *gin.Context) {
+	roomIDStr := c.Param("room_id")
+	roomID, err := strconv.ParseUint(roomIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "房间ID格式错误")
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+
+	operation, err := ctrl.roomService.ReturnToRoom(uint(roomID), userID.(uint))
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	var data interface{}
+	if operation != nil {
+		data = gin.H{
+			"operation": operation,
+		}
+	}
+
+	utils.SuccessWithMessage(c, "返回房间成功", data)
+}
+
 // LeaveRoom 离开房间
 func (ctrl *RoomController) LeaveRoom(c *gin.Context) {
 	// 获取房间ID
