@@ -211,7 +211,7 @@ func (s *SettlementService) ConfirmSettlement(roomID, userID uint) (string, time
 	s.roomService.recordOperation(roomID, userID, models.OpTypeSettlementConfirmed, nil, nil, description)
 
 	log.Printf("确认结算成功: RoomID=%d, UserID=%d, Batch=%s", roomID, userID, settlementBatch)
-	s.roomService.broadcastSettlementConfirmed(roomID, userID, settlementBatch, settledAt)
+	s.roomService.broadcastSettlementConfirmed(roomID, userID, settlementBatch, settledAt, descPayload)
 
 	return settlementBatch, settledAt, nil
 }

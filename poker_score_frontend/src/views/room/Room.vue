@@ -613,6 +613,56 @@ const formatOperationDescription = (op: RoomOperation) => {
       }
       break
     }
+    case 'settlement_confirmed': {
+      const summary = op.settlement_summary
+
+      if (summary) {
+        const infoParts: string[] = []
+
+        if (summary.chip_rate) {
+          infoParts.push(`倍率 ${summary.chip_rate}`)
+        }
+
+        if (summary.settled_at) {
+          infoParts.push(`时间 ${formatDateTime(summary.settled_at)}`)
+        }
+
+        const baseText = infoParts.length > 0
+          ? `确认了结算（${infoParts.join('，')}）`
+          : '确认了结算'
+        parts.push(baseText)
+
+        if (summary.details && summary.details.length > 0) {
+          const detailText = summary.details
+            .map((detail) => {
+              if (!Number.isFinite(detail.chip_amount)) {
+                return ''
+              }
+
+              const nickname = typeof detail.nickname === 'string' && detail.nickname.trim().length > 0
+                ? detail.nickname.trim()
+                : memberNicknameMap.value.get(detail.user_id) ?? `用户${detail.user_id}`
+
+              const chipText = `${detail.chip_amount}积分`
+              const rmbText =
+                typeof detail.rmb_amount === 'number' && Number.isFinite(detail.rmb_amount)
+                  ? `（¥${detail.rmb_amount.toFixed(2)}）`
+                  : ''
+
+              return `${nickname}: ${chipText}${rmbText}`
+            })
+            .filter((text) => text.trim().length > 0)
+            .join('；')
+
+          if (detailText.length > 0) {
+            parts.push(`结算详情：${detailText}`)
+          }
+        }
+      } else {
+        parts.push('确认了结算')
+      }
+      break
+    }
     default:
       parts.push(op.description)
   }

@@ -19,6 +19,20 @@ export interface NiuniuBetDetail {
   amount: number
 }
 
+export interface SettlementDetail {
+  user_id: number
+  nickname?: string
+  chip_amount: number
+  rmb_amount?: number
+}
+
+export interface SettlementSummary {
+  batch?: string
+  chip_rate?: string
+  settled_at?: string
+  details: SettlementDetail[]
+}
+
 export interface RoomInfo {
   room_id: number
   room_code: string
@@ -41,6 +55,7 @@ export interface RoomOperation {
   target_nickname?: string
   created_at: string
   bets?: NiuniuBetDetail[]
+  settlement_summary?: SettlementSummary
 }
 
 export interface SettlementPlanItem {
@@ -159,24 +174,112 @@ export const useRoomStore = defineStore('room', () => {
     }
   }
 
+  function parseSettlementDescription(description?: string): SettlementSummary | null {
+    if (!description) {
+      return null
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(description)
+    } catch (error) {
+      return null
+    }
+
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      return null
+    }
+
+    const record = parsed as {
+      batch?: unknown
+      chip_rate?: unknown
+      settled_at?: unknown
+      details?: unknown
+    }
+
+    const summary: SettlementSummary = {
+      details: [],
+    }
+
+    if (typeof record.batch === 'string' && record.batch.trim().length > 0) {
+      summary.batch = record.batch
+    }
+
+    if (typeof record.chip_rate === 'string' && record.chip_rate.trim().length > 0) {
+      summary.chip_rate = record.chip_rate
+    }
+
+    if (typeof record.settled_at === 'string' && record.settled_at.trim().length > 0) {
+      summary.settled_at = record.settled_at
+    }
+
+    if (Array.isArray(record.details)) {
+      record.details.forEach((item) => {
+        const detail = item as {
+          user_id?: unknown
+          nickname?: unknown
+          chip_amount?: unknown
+          rmb_amount?: unknown
+        }
+
+        const userId = Number(detail.user_id)
+        const chipAmount = Number(detail.chip_amount)
+
+        if (!Number.isFinite(userId) || !Number.isFinite(chipAmount)) {
+          return
+        }
+
+        const settlementDetail: SettlementDetail = {
+          user_id: userId,
+          chip_amount: chipAmount,
+        }
+
+        if (typeof detail.nickname === 'string' && detail.nickname.trim().length > 0) {
+          settlementDetail.nickname = detail.nickname
+        }
+
+        const rmbAmount = Number(detail.rmb_amount)
+        if (Number.isFinite(rmbAmount)) {
+          settlementDetail.rmb_amount = rmbAmount
+        }
+
+        summary.details.push(settlementDetail)
+      })
+    }
+
+    if (!summary.batch && !summary.chip_rate && !summary.settled_at && summary.details.length === 0) {
+      return null
+    }
+
+    return summary
+  }
+
   function normalizeOperation(operation: RoomOperation): RoomOperation {
-    if (operation.operation_type !== 'niuniu_bet') {
-      return operation
-    }
+    let normalized = operation
 
-    if (operation.bets && operation.bets.length > 0) {
-      return operation
-    }
-
-    const bets = parseNiuniuBetDescription(operation.description)
-    if (bets) {
-      return {
-        ...operation,
-        bets,
+    if (operation.operation_type === 'niuniu_bet') {
+      if (!operation.bets || operation.bets.length === 0) {
+        const bets = parseNiuniuBetDescription(operation.description)
+        if (bets) {
+          normalized = {
+            ...normalized,
+            bets,
+          }
+        }
       }
     }
 
-    return operation
+    if (operation.operation_type === 'settlement_confirmed') {
+      const summary = parseSettlementDescription(operation.description)
+      if (summary) {
+        normalized = {
+          ...normalized,
+          settlement_summary: summary,
+        }
+      }
+    }
+
+    return normalized
   }
 
   function addOperation(operation: RoomOperation) {
@@ -534,6 +637,24 @@ export const useRoomStore = defineStore('room', () => {
         // 确认结算
         const settledAt = message.data.settled_at ?? new Date().toISOString()
         const currentContext = settlementContext.value
+
+        let description = '确认了结算'
+        let settlementSummary: SettlementSummary | undefined
+
+        const summaryPayload = message.data.settlement_summary
+        if (summaryPayload) {
+          try {
+            description = JSON.stringify(summaryPayload)
+          } catch (error) {
+            console.warn('序列化实时结算摘要失败:', error, summaryPayload)
+          }
+
+          const parsedSummary = parseSettlementDescription(description)
+          if (parsedSummary) {
+            settlementSummary = parsedSummary
+          }
+        }
+
         settlementContext.value = {
           initiated_by: currentContext?.initiated_by ?? message.data.confirmed_by,
           initiated_by_nickname:
@@ -551,7 +672,8 @@ export const useRoomStore = defineStore('room', () => {
           user_id: message.data.confirmed_by,
           nickname: message.data.confirmed_by_nickname,
           operation_type: 'settlement_confirmed',
-          description: '确认了结算',
+          description,
+          settlement_summary: settlementSummary,
           created_at: message.data.settled_at ?? new Date().toISOString(),
         })
 

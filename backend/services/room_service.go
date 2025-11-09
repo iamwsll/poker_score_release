@@ -953,7 +953,7 @@ func (s *RoomService) broadcastSettlementInitiated(roomID, initiatedBy uint, ini
 	s.hub.BroadcastToRoom(roomID, payload)
 }
 
-func (s *RoomService) broadcastSettlementConfirmed(roomID, confirmedBy uint, settlementBatch string, settledAt time.Time) {
+func (s *RoomService) broadcastSettlementConfirmed(roomID, confirmedBy uint, settlementBatch string, settledAt time.Time, summary map[string]interface{}) {
 	if s.hub == nil {
 		return
 	}
@@ -971,6 +971,7 @@ func (s *RoomService) broadcastSettlementConfirmed(roomID, confirmedBy uint, set
 			"confirmed_by_nickname": user.Nickname,
 			"settlement_batch":      settlementBatch,
 			"settled_at":            settledAt.Format(time.RFC3339),
+			"settlement_summary":    summary,
 		},
 	}
 
