@@ -1018,6 +1018,10 @@ const handleDissolveRoom = () => {
         .dissolveRoom(roomId.value)
         .then(() => {
           message.success('房间已解散')
+          roomStore.clearRoomInfo()
+          router.push('/').catch((pushError) => {
+            console.error(pushError)
+          })
         })
         .catch((error) => {
           console.error(error)
