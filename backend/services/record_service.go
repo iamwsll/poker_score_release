@@ -2,11 +2,36 @@ package services
 
 import (
 	"poker_score_backend/models"
+	"strings"
 	"time"
 )
 
 // RecordService 战绩统计服务
 type RecordService struct{}
+
+type tonightRecordSummary struct {
+	UserID     uint
+	ManualChip int
+	ManualRmb  float64
+	AutoChip   int
+	AutoRmb    float64
+	ActiveChip int
+	ActiveRmb  float64
+	Nickname   string
+	IsMe       bool
+}
+
+func ensureRecordSummary(cache map[uint]*tonightRecordSummary, userID uint) *tonightRecordSummary {
+	summary, exists := cache[userID]
+	if !exists {
+		summary = &tonightRecordSummary{
+			UserID: userID,
+		}
+		cache[userID] = summary
+	}
+
+	return summary
+}
 
 // NewRecordService 创建战绩统计服务
 func NewRecordService() *RecordService {
@@ -30,54 +55,173 @@ func (s *RecordService) GetTonightRecords(userID uint, startTime, endTime *time.
 		Where("user_id = ? AND joined_at BETWEEN ? AND ?", userID, start, end).
 		Distinct("room_id").
 		Pluck("room_id", &roomIDs).Error
-	
 	if err != nil {
 		return nil, err
 	}
 
 	// 使用BFS查找"今晚一起玩过的好友"
 	friendIDs := s.findFriendsWithBFS(roomIDs, start, end)
-
-	// 查询这些好友的结算记录
-	var settlements []models.Settlement
-	err = models.DB.Where("user_id IN ? AND settled_at BETWEEN ? AND ?", friendIDs, start, end).
-		Find(&settlements).Error
-	
-	if err != nil {
-		return nil, err
+	friendSet := make(map[uint]struct{})
+	friendSet[userID] = struct{}{}
+	for _, fid := range friendIDs {
+		friendSet[fid] = struct{}{}
 	}
 
-	// 按用户聚合结算记录
-	userRecords := make(map[uint]map[string]interface{})
-	for _, settlement := range settlements {
-		if _, exists := userRecords[settlement.UserID]; !exists {
-			userRecords[settlement.UserID] = map[string]interface{}{
-				"user_id":    settlement.UserID,
-				"total_chip": 0,
-				"total_rmb":  0.0,
+	buildIDList := func(set map[uint]struct{}) []uint {
+		ids := make([]uint, 0, len(set))
+		for id := range set {
+			ids = append(ids, id)
+		}
+		return ids
+	}
+
+	summaries := make(map[uint]*tonightRecordSummary)
+
+	settlementQueryIDs := buildIDList(friendSet)
+	if len(settlementQueryIDs) > 0 {
+		var settlements []models.Settlement
+		if err := models.DB.Where("user_id IN ? AND settled_at BETWEEN ? AND ?", settlementQueryIDs, start, end).
+			Find(&settlements).Error; err != nil {
+			return nil, err
+		}
+
+		for _, settlement := range settlements {
+			friendSet[settlement.UserID] = struct{}{}
+			summary := ensureRecordSummary(summaries, settlement.UserID)
+			if strings.HasPrefix(settlement.SettlementBatch, "auto-") {
+				summary.AutoChip += settlement.ChipAmount
+				summary.AutoRmb += settlement.RmbAmount
+			} else {
+				summary.ManualChip += settlement.ChipAmount
+				summary.ManualRmb += settlement.RmbAmount
 			}
 		}
-		
-		record := userRecords[settlement.UserID]
-		record["total_chip"] = record["total_chip"].(int) + settlement.ChipAmount
-		record["total_rmb"] = record["total_rmb"].(float64) + settlement.RmbAmount
 	}
 
-	// 获取用户昵称并构造结果
-	friendsRecords := make([]map[string]interface{}, 0, len(userRecords))
-	for uid, record := range userRecords {
-		var user models.User
-		models.DB.First(&user, uid)
-		
-		record["nickname"] = user.Nickname
-		record["is_me"] = (uid == userID)
+	activeQueryIDs := buildIDList(friendSet)
+	if len(activeQueryIDs) > 0 {
+		var activeMembers []models.RoomMember
+		if err := models.DB.Where("user_id IN ? AND left_at IS NULL", activeQueryIDs).
+			Find(&activeMembers).Error; err != nil {
+			return nil, err
+		}
+
+		roomIDSet := make(map[uint]struct{})
+		for _, member := range activeMembers {
+			roomIDSet[member.RoomID] = struct{}{}
+		}
+
+		if len(roomIDSet) > 0 {
+			activeRoomIDs := make([]uint, 0, len(roomIDSet))
+			for rid := range roomIDSet {
+				activeRoomIDs = append(activeRoomIDs, rid)
+			}
+
+			var activeRooms []models.Room
+			if err := models.DB.Where("id IN ? AND status = ?", activeRoomIDs, "active").
+				Find(&activeRooms).Error; err != nil {
+				return nil, err
+			}
+
+			roomMap := make(map[uint]models.Room, len(activeRooms))
+			for _, room := range activeRooms {
+				roomMap[room.ID] = room
+			}
+
+			type roomUserKey struct {
+				RoomID uint
+				UserID uint
+			}
+
+			var balances []models.UserBalance
+			if err := models.DB.Where("room_id IN ? AND user_id IN ?", activeRoomIDs, activeQueryIDs).
+				Find(&balances).Error; err != nil {
+				return nil, err
+			}
+
+			balanceMap := make(map[roomUserKey]int, len(balances))
+			for _, balance := range balances {
+				balanceMap[roomUserKey{RoomID: balance.RoomID, UserID: balance.UserID}] = balance.Balance
+			}
+
+			for _, member := range activeMembers {
+				room, ok := roomMap[member.RoomID]
+				if !ok {
+					continue
+				}
+
+				balance := balanceMap[roomUserKey{RoomID: member.RoomID, UserID: member.UserID}]
+				if balance == 0 {
+					continue
+				}
+
+				summary := ensureRecordSummary(summaries, member.UserID)
+				summary.ActiveChip += balance
+				summary.ActiveRmb += calculateRmbAmount(balance, room.ChipRate)
+				friendSet[member.UserID] = struct{}{}
+			}
+		}
+	}
+
+	for id := range friendSet {
+		ensureRecordSummary(summaries, id)
+	}
+
+	ensureRecordSummary(summaries, userID).IsMe = true
+
+	userIDs := make([]uint, 0, len(summaries))
+	for id := range summaries {
+		userIDs = append(userIDs, id)
+	}
+
+	if len(userIDs) > 0 {
+		var users []models.User
+		if err := models.DB.Where("id IN ?", userIDs).Find(&users).Error; err != nil {
+			return nil, err
+		}
+
+		for _, user := range users {
+			if summary, exists := summaries[user.ID]; exists {
+				summary.Nickname = user.Nickname
+				if user.ID == userID {
+					summary.IsMe = true
+				}
+			}
+		}
+	}
+
+	friendsRecords := make([]map[string]interface{}, 0, len(summaries))
+	totalCheck := 0.0
+	for _, summary := range summaries {
+		settledChip := summary.ManualChip + summary.AutoChip
+		settledRmb := summary.ManualRmb + summary.AutoRmb
+		totalChip := settledChip + summary.ActiveChip
+		totalRmb := settledRmb + summary.ActiveRmb
+
+		record := map[string]interface{}{
+			"user_id":                summary.UserID,
+			"nickname":               summary.Nickname,
+			"is_me":                  summary.IsMe,
+			"manual_settlement_chip": summary.ManualChip,
+			"manual_settlement_rmb":  summary.ManualRmb,
+			"auto_settlement_chip":   summary.AutoChip,
+			"auto_settlement_rmb":    summary.AutoRmb,
+			"active_balance_chip":    summary.ActiveChip,
+			"active_balance_rmb":     summary.ActiveRmb,
+			"settled_chip":           settledChip,
+			"settled_rmb":            settledRmb,
+			"total_chip":             totalChip,
+			"total_rmb":              totalRmb,
+		}
+
 		friendsRecords = append(friendsRecords, record)
+		totalCheck += totalRmb
 	}
 
 	// 查询用户当前在的房间
 	var currentRoomMembers []models.RoomMember
 	models.DB.Where("user_id = ? AND left_at IS NULL", userID).Find(&currentRoomMembers)
-	
+
 	currentRooms := make([]map[string]interface{}, 0, len(currentRoomMembers))
 	for _, member := range currentRoomMembers {
 		var room models.Room
@@ -88,12 +232,6 @@ func (s *RecordService) GetTonightRecords(userID uint, startTime, endTime *time.
 				"room_type": room.RoomType,
 			})
 		}
-	}
-
-	// 计算总和校验
-	totalCheck := 0.0
-	for _, record := range friendsRecords {
-		totalCheck += record["total_rmb"].(float64)
 	}
 
 	return map[string]interface{}{
@@ -174,4 +312,3 @@ func (s *RecordService) findFriendsWithBFS(initialRoomIDs []uint, start, end tim
 
 	return friendIDs
 }
-

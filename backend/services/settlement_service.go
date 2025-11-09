@@ -6,8 +6,6 @@ import (
 	"log"
 	"poker_score_backend/models"
 	"sort"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -108,7 +106,7 @@ func (s *SettlementService) ConfirmSettlement(roomID, userID uint) (string, time
 			}
 
 			// 计算人民币金额
-			rmbAmount := s.calculateRmbAmount(balance.Balance, room.ChipRate)
+			rmbAmount := calculateRmbAmount(balance.Balance, room.ChipRate)
 
 			settlement := models.Settlement{
 				RoomID:          roomID,
@@ -205,7 +203,7 @@ func (s *SettlementService) generateSettlementPlan(balances []models.UserBalance
 	// 1. 所有负积分的人向正积分最高的人转账
 	for _, negUser := range negativeUsers {
 		amount := -negUser.Balance
-		rmbAmount := s.calculateRmbAmount(amount, chipRate)
+		rmbAmount := calculateRmbAmount(amount, chipRate)
 
 		plan = append(plan, SettlementPlan{
 			FromUserID:   negUser.UserID,
@@ -222,7 +220,7 @@ func (s *SettlementService) generateSettlementPlan(balances []models.UserBalance
 	for i := 1; i < len(positiveUsers); i++ {
 		posUser := positiveUsers[i]
 		amount := posUser.Balance
-		rmbAmount := s.calculateRmbAmount(amount, chipRate)
+		rmbAmount := calculateRmbAmount(amount, chipRate)
 
 		plan = append(plan, SettlementPlan{
 			FromUserID:   maxPositiveUser.UserID,
@@ -238,21 +236,4 @@ func (s *SettlementService) generateSettlementPlan(balances []models.UserBalance
 	return plan
 }
 
-// calculateRmbAmount 计算人民币金额
-func (s *SettlementService) calculateRmbAmount(chipAmount int, chipRate string) float64 {
-	// 解析比例，如 "20:1" 表示 20积分 = 1元
-	parts := strings.Split(chipRate, ":")
-	if len(parts) != 2 {
-		return 0
-	}
-
-	chipPart, err1 := strconv.ParseFloat(parts[0], 64)
-	rmbPart, err2 := strconv.ParseFloat(parts[1], 64)
-
-	if err1 != nil || err2 != nil || chipPart == 0 {
-		return 0
-	}
-
-	// 计算人民币金额
-	return float64(chipAmount) * rmbPart / chipPart
-}
+// ... existing code ...

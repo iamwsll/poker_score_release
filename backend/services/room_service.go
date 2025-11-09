@@ -10,6 +10,7 @@ import (
 	ws "poker_score_backend/websocket"
 	"time"
 
+	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
 
@@ -508,6 +509,7 @@ func (s *RoomService) checkAndDissolveRoom(roomID uint) {
 		Order("created_at DESC").
 		First(&lastOp).Error
 
+	var settledAt time.Time
 	if err != nil {
 		if !errors.Is(err, gorm.ErrRecordNotFound) {
 			log.Printf("查询房间最近操作失败: RoomID=%d, %v", roomID, err)
@@ -517,29 +519,109 @@ func (s *RoomService) checkAndDissolveRoom(roomID uint) {
 		if room.CreatedAt.After(cutoff) {
 			return
 		}
+		settledAt = room.CreatedAt
 	} else if lastOp.CreatedAt.After(cutoff) {
 		return
+	} else {
+		settledAt = lastOp.CreatedAt
 	}
 
 	now := time.Now()
-	res := models.DB.Model(&models.Room{}).
-		Where("id = ? AND status = ?", roomID, "active").
-		Updates(map[string]interface{}{
-			"status":       "dissolved",
-			"dissolved_at": now,
-		})
-
-	if res.Error != nil {
-		log.Printf("解散房间失败: RoomID=%d, %v", roomID, res.Error)
-		return
+	if settledAt.IsZero() || settledAt.After(now) {
+		settledAt = now
 	}
 
-	if res.RowsAffected == 0 {
+	err = models.DB.Transaction(func(tx *gorm.DB) error {
+		res := tx.Model(&models.Room{}).
+			Where("id = ? AND status = ?", roomID, "active").
+			Updates(map[string]interface{}{
+				"status":       "dissolved",
+				"dissolved_at": now,
+			})
+
+		if res.Error != nil {
+			return res.Error
+		}
+
+		if res.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+
+		if err := s.autoSettleRoomWithDB(tx, &room, settledAt); err != nil {
+			return err
+		}
+
+		return nil
+	})
+
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return
+		}
+
+		log.Printf("解散房间失败: RoomID=%d, %v", roomID, err)
 		return
 	}
 
 	log.Printf("房间因12小时无操作已解散: RoomID=%d", roomID)
 	s.broadcastRoomDissolved(roomID, now)
+}
+
+func (s *RoomService) autoSettleRoomWithDB(tx *gorm.DB, room *models.Room, settledAt time.Time) error {
+	var balances []models.UserBalance
+	if err := tx.Where("room_id = ?", room.ID).Find(&balances).Error; err != nil {
+		return err
+	}
+
+	if len(balances) == 0 {
+		return nil
+	}
+
+	tableBalance := s.CalculateTableBalanceWithDB(tx, room.ID)
+	if tableBalance > 0 {
+		bestIdx := -1
+		for i := range balances {
+			if bestIdx == -1 ||
+				balances[i].Balance > balances[bestIdx].Balance ||
+				(balances[i].Balance == balances[bestIdx].Balance && balances[i].UserID < balances[bestIdx].UserID) {
+				bestIdx = i
+			}
+		}
+
+		if bestIdx >= 0 {
+			balances[bestIdx].Balance += tableBalance
+		}
+	}
+
+	batchID := fmt.Sprintf("auto-%s", uuid.New().String())
+
+	for _, balance := range balances {
+		if balance.Balance == 0 {
+			continue
+		}
+
+		rmbAmount := calculateRmbAmount(balance.Balance, room.ChipRate)
+		settlement := models.Settlement{
+			RoomID:          room.ID,
+			UserID:          balance.UserID,
+			ChipAmount:      balance.Balance,
+			RmbAmount:       rmbAmount,
+			SettledAt:       settledAt,
+			SettlementBatch: batchID,
+		}
+
+		if err := tx.Create(&settlement).Error; err != nil {
+			return err
+		}
+	}
+
+	if err := tx.Model(&models.UserBalance{}).
+		Where("room_id = ?", room.ID).
+		Update("balance", 0).Error; err != nil {
+		return err
+	}
+
+	return nil
 }
 
 // recordOperation 记录操作
