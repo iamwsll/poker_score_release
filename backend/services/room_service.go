@@ -528,6 +528,26 @@ func (s *RoomService) checkAndDissolveRoom(roomID uint) {
 	} else {
 		settledAt = lastOp.CreatedAt
 	}
+	//我们让"自动结算"的时间设定在"房间关闭前的最后一次"金融"操作",避免在计算历史战绩时搞错了时间
+	financialOpTypes := []string{
+		models.OpTypeBet,
+		models.OpTypeWithdraw,
+		models.OpTypeNiuniuBet,
+	}
+
+	var lastFinancialOp models.RoomOperation
+	finErr := models.DB.Where("room_id = ? AND operation_type IN ?", roomID, financialOpTypes).
+		Order("created_at DESC").
+		First(&lastFinancialOp).Error
+
+	if finErr != nil {
+		if !errors.Is(finErr, gorm.ErrRecordNotFound) {
+			log.Printf("查询房间最近金融操作失败: RoomID=%d, %v", roomID, finErr)
+			return
+		}
+	} else {
+		settledAt = lastFinancialOp.CreatedAt
+	}
 
 	now := time.Now()
 	if settledAt.IsZero() || settledAt.After(now) {
