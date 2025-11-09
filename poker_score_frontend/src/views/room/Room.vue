@@ -255,8 +255,52 @@
       title="更多功能"
       :footer="null"
     >
-      <a-button block size="large" @click="handleKickUser">
-        有人走了？
+      <div class="more-actions">
+        <a-button block size="large" @click="handleForceTransfer">
+          积分强制转移
+        </a-button>
+        <a-button block size="large" @click="handleKickUser">
+          有人走了？
+        </a-button>
+      </div>
+    </a-modal>
+
+    <a-modal
+      v-model:open="showForceTransferModal"
+      title="积分强制转移"
+      :footer="null"
+    >
+      <div class="force-transfer-intro">
+        当前桌面可转移积分
+        <span class="force-transfer-highlight">{{ roomStore.roomInfo?.table_balance ?? 0 }}</span>
+      </div>
+      <div class="force-transfer-tip">先选择接收者，再点击确认，避免误触。</div>
+      <div v-if="roomStore.roomInfo?.members?.length" class="force-transfer-options">
+        <div
+          v-for="member in roomStore.roomInfo.members"
+          :key="member.user_id"
+          class="force-transfer-card"
+          :class="{ selected: forceTransferTargetId === member.user_id }"
+          @click="selectForceTransferTarget(member.user_id)"
+        >
+          <div class="force-transfer-name">{{ member.nickname }}</div>
+          <div class="force-transfer-balance">
+            当前积分：
+            <span :class="{ negative: member.balance < 0 }">{{ member.balance }}</span>
+          </div>
+        </div>
+      </div>
+      <div v-else class="force-transfer-empty">暂无可转移目标</div>
+      <a-button
+        type="primary"
+        block
+        size="large"
+        class="force-transfer-submit"
+        :disabled="!forceTransferTargetId"
+        :loading="forceTransferLoading"
+        @click="confirmForceTransfer"
+      >
+        确认转移
       </a-button>
     </a-modal>
 
@@ -264,14 +308,41 @@
     <a-modal
       v-model:open="showKickModal"
       title="选择离开的用户"
-      @ok="confirmKick"
-      :confirmLoading="kickLoading"
+      :footer="null"
     >
-      <a-radio-group v-model:value="kickUserId" style="width: 100%">
-        <div v-for="member in roomStore.roomInfo.members" :key="member.user_id" style="margin-bottom: 12px">
-          <a-radio :value="member.user_id">{{ member.nickname }}</a-radio>
+      <div class="kick-tip">点击卡片选择离开房间的成员，再确认操作，避免误触。</div>
+      <div v-if="roomStore.roomInfo?.members?.length" class="kick-options">
+        <div
+          v-for="member in roomStore.roomInfo.members"
+          :key="member.user_id"
+          class="kick-card"
+          :class="{ selected: kickUserId === member.user_id }"
+          @click="selectKickUser(member.user_id)"
+        >
+          <div class="kick-name">{{ member.nickname }}</div>
+          <div class="kick-status">
+            当前状态：
+            <span
+              class="kick-status-value"
+              :class="{ offline: member.status === 'offline' }"
+            >
+              {{ member.status === 'offline' ? '离线' : '在线' }}
+            </span>
+          </div>
         </div>
-      </a-radio-group>
+      </div>
+      <div v-else class="kick-empty">暂无可操作成员</div>
+      <a-button
+        type="primary"
+        block
+        size="large"
+        class="kick-submit"
+        :disabled="!kickUserId"
+        :loading="kickLoading"
+        @click="confirmKick"
+      >
+        确认踢出
+      </a-button>
     </a-modal>
 
     <!-- 结算方案弹窗 -->
@@ -348,6 +419,7 @@ const showBetModal = ref(false)
 const showWithdrawModal = ref(false)
 const showNiuniuBetModal = ref(false)
 const showMoreModal = ref(false)
+const showForceTransferModal = ref(false)
 const showKickModal = ref(false)
 const showSettlementPlanModal = ref(false)
 
@@ -355,6 +427,7 @@ const showSettlementPlanModal = ref(false)
 const betAmount = ref<number>()
 const withdrawAmount = ref<number>()
 const kickUserId = ref<number>()
+const forceTransferTargetId = ref<number>()
 const niuniuBetForm = reactive({
   amounts: {} as Record<number, number | undefined | null>
 })
@@ -366,6 +439,7 @@ const betLoading = ref(false)
 const withdrawLoading = ref(false)
 const niuniuBetLoading = ref(false)
 const kickLoading = ref(false)
+const forceTransferLoading = ref(false)
 const settlementLoading = ref(false)
 const confirmSettlementLoading = ref(false)
 
@@ -485,6 +559,24 @@ watch(
       } else {
         dismissedSettlementKey.value = null
       }
+    }
+  }
+)
+
+watch(
+  () => showForceTransferModal.value,
+  (open, wasOpen) => {
+    if (!open && wasOpen) {
+      forceTransferTargetId.value = undefined
+    }
+  }
+)
+
+watch(
+  () => showKickModal.value,
+  (open, wasOpen) => {
+    if (!open && wasOpen) {
+      kickUserId.value = undefined
     }
   }
 )
@@ -610,6 +702,25 @@ const formatOperationDescription = (op: RoomOperation) => {
         }
       } else {
         parts.push(op.description)
+      }
+      break
+    }
+    case 'force_transfer': {
+      const amount = typeof op.amount === 'number' ? op.amount : null
+      const targetName = op.target_nickname && op.target_nickname.trim().length > 0
+        ? op.target_nickname
+        : op.target_user_id
+          ? memberNicknameMap.value.get(op.target_user_id) ?? `用户${op.target_user_id}`
+          : ''
+
+      if (amount !== null) {
+        if (targetName) {
+          parts.push(`将桌面${amount}积分转移给${targetName}`)
+        } else {
+          parts.push(`将桌面${amount}积分转移给其他玩家`)
+        }
+      } else {
+        parts.push(op.description || '执行了积分强制转移')
       }
       break
     }
@@ -853,6 +964,100 @@ const confirmKick = async () => {
     // 错误已处理
   } finally {
     kickLoading.value = false
+  }
+}
+
+const handleForceTransfer = () => {
+  showMoreModal.value = false
+
+  const tableBalance = roomStore.roomInfo?.table_balance ?? 0
+  if (tableBalance <= 0) {
+    message.warning('当前桌面没有可转移的积分')
+    return
+  }
+
+  const members = roomStore.roomInfo?.members ?? []
+  if (members.length === 0) {
+    message.warning('暂无可转移的目标')
+    return
+  }
+
+  showForceTransferModal.value = true
+}
+
+const selectKickUser = (userId: number) => {
+  kickUserId.value = userId
+}
+
+const selectForceTransferTarget = (userId: number) => {
+  forceTransferTargetId.value = userId
+}
+
+const confirmForceTransfer = async () => {
+  if (!roomStore.roomInfo) {
+    message.warning('房间信息加载中，请稍后再试')
+    return
+  }
+
+  if ((roomStore.roomInfo.table_balance ?? 0) <= 0) {
+    message.warning('当前桌面没有可转移的积分')
+    return
+  }
+
+  if (!forceTransferTargetId.value) {
+    message.warning('请选择接收积分的用户')
+    return
+  }
+
+  forceTransferLoading.value = true
+  try {
+    const res = await roomApi.forceTransfer(roomId.value, forceTransferTargetId.value)
+    const data = res.data ?? {}
+
+    const tableBalance = Number(data.table_balance)
+    if (Number.isFinite(tableBalance)) {
+      roomStore.updateTableBalance(tableBalance)
+    }
+
+    const targetId = Number(data.target_user_id ?? forceTransferTargetId.value)
+    const targetBalance = Number(data.target_balance)
+    if (Number.isFinite(targetId) && targetId > 0 && Number.isFinite(targetBalance)) {
+      const targetMember =
+        roomStore.roomInfo.members.find((member) => member.user_id === targetId) ?? null
+      roomStore.updateMember({
+        user_id: targetId,
+        nickname: targetMember?.nickname ?? '',
+        balance: targetBalance
+      })
+      if (userStore.user?.id === targetId) {
+        roomStore.updateMyBalance(targetBalance)
+      }
+    }
+
+    const fallbackActorId = userStore.user?.id ?? 0
+    const actorId = Number(data.actor_user_id ?? fallbackActorId)
+    const actorBalance = Number(data.actor_balance)
+    if (Number.isFinite(actorId) && actorId > 0 && Number.isFinite(actorBalance)) {
+      const actorMember =
+        roomStore.roomInfo.members.find((member) => member.user_id === actorId) ?? null
+      roomStore.updateMember({
+        user_id: actorId,
+        nickname: actorMember?.nickname ?? userStore.user?.nickname ?? '',
+        balance: actorBalance
+      })
+      if (userStore.user?.id === actorId) {
+        roomStore.updateMyBalance(actorBalance)
+      }
+    }
+
+    message.success('积分已转移')
+    showForceTransferModal.value = false
+    forceTransferTargetId.value = undefined
+  } catch (error) {
+    console.error(error)
+    // 错误已处理
+  } finally {
+    forceTransferLoading.value = false
   }
 }
 
@@ -1168,6 +1373,142 @@ onUnmounted(() => {
   font-size: 13px;
   text-align: center;
   padding: 24px 0;
+}
+
+.more-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.force-transfer-intro {
+  font-size: 14px;
+  color: #555;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.force-transfer-highlight {
+  font-size: 20px;
+  font-weight: 600;
+  color: #fa8c16;
+}
+
+.force-transfer-tip {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #999;
+}
+
+.force-transfer-options {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.force-transfer-card {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #e9ecff;
+  background: #f9faff;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.force-transfer-card.selected {
+  border-color: #667eea;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.2);
+}
+
+.force-transfer-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.force-transfer-balance {
+  font-size: 13px;
+  color: #666;
+}
+
+.force-transfer-balance .negative {
+  color: #ff4d4f;
+}
+
+.force-transfer-empty {
+  margin-top: 16px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+.force-transfer-submit {
+  margin-top: 24px;
+}
+
+.kick-tip {
+  font-size: 13px;
+  color: #999;
+}
+
+.kick-options {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.kick-card {
+  padding: 16px;
+  border-radius: 12px;
+  border: 1px solid #e8f5ff;
+  background: #f5fbff;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.kick-card.selected {
+  border-color: #13c2c2;
+  background: #fff;
+  box-shadow: 0 6px 16px rgba(19, 194, 194, 0.2);
+}
+
+.kick-name {
+  font-size: 16px;
+  font-weight: 600;
+  color: #333;
+}
+
+.kick-status {
+  font-size: 13px;
+  color: #666;
+}
+
+.kick-status-value {
+  color: #13c2c2;
+  font-weight: 500;
+}
+
+.kick-status-value.offline {
+  color: #ff4d4f;
+}
+
+.kick-empty {
+  margin-top: 16px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
+
+.kick-submit {
+  margin-top: 24px;
 }
 </style>
 

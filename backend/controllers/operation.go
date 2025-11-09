@@ -62,6 +62,11 @@ type WithdrawRequest struct {
 	Amount int `json:"amount"` // 0或负数表示全收
 }
 
+// ForceTransferRequest 积分强制转移请求
+type ForceTransferRequest struct {
+	TargetUserID uint `json:"target_user_id" binding:"required"`
+}
+
 // Withdraw 收回
 func (ctrl *OperationController) Withdraw(c *gin.Context) {
 	// 获取房间ID
@@ -93,6 +98,41 @@ func (ctrl *OperationController) Withdraw(c *gin.Context) {
 		"table_balance": tableBalance,
 		"actual_amount": actualAmount,
 	})
+}
+
+// ForceTransfer 积分强制转移
+func (ctrl *OperationController) ForceTransfer(c *gin.Context) {
+	roomIDStr := c.Param("room_id")
+	roomID, err := strconv.ParseUint(roomIDStr, 10, 32)
+	if err != nil {
+		utils.BadRequest(c, "房间ID格式错误")
+		return
+	}
+
+	var req ForceTransferRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		utils.BadRequest(c, "参数错误: "+err.Error())
+		return
+	}
+
+	userID, _ := c.Get("user_id")
+
+	actorBalance, targetBalance, tableBalance, amount, err := ctrl.operationService.ForceTransfer(uint(roomID), userID.(uint), req.TargetUserID)
+	if err != nil {
+		utils.BadRequest(c, err.Error())
+		return
+	}
+
+	response := gin.H{
+		"table_balance":      tableBalance,
+		"transferred_amount": amount,
+		"target_user_id":     req.TargetUserID,
+		"target_balance":     targetBalance,
+		"actor_user_id":      userID.(uint),
+		"actor_balance":      actorBalance,
+	}
+
+	utils.SuccessWithMessage(c, "积分已转移", response)
 }
 
 // NiuniuBetRequest 牛牛下注请求

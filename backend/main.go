@@ -88,6 +88,7 @@ func main() {
 			// 房间操作
 			rooms.POST("/:room_id/bet", operationController.Bet)
 			rooms.POST("/:room_id/withdraw", operationController.Withdraw)
+			rooms.POST("/:room_id/force-transfer", operationController.ForceTransfer)
 			rooms.POST("/:room_id/niuniu-bet", operationController.NiuniuBet)
 			rooms.GET("/:room_id/operations", operationController.GetOperations)
 			rooms.GET("/:room_id/history-amounts", operationController.GetHistoryAmounts)

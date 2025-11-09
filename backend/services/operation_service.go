@@ -149,6 +149,79 @@ func (s *OperationService) Withdraw(roomID, userID uint, amount int) (int, int, 
 	return myBalance, tableBalance, actualAmount, nil
 }
 
+// ForceTransfer 将桌面积分强制转移给指定用户
+func (s *OperationService) ForceTransfer(roomID, userID, targetUserID uint) (int, int, int, int, error) {
+	var actorBalance, targetBalance, tableBalance, transferredAmount int
+	var operation *models.RoomOperation
+
+	err := models.DB.Transaction(func(tx *gorm.DB) error {
+		// 检查操作者是否在房间中
+		var actorMember models.RoomMember
+		if err := tx.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, userID).First(&actorMember).Error; err != nil {
+			return errors.New("您不在该房间中")
+		}
+
+		// 检查目标用户是否在房间中
+		var targetMember models.RoomMember
+		if err := tx.Where("room_id = ? AND user_id = ? AND left_at IS NULL", roomID, targetUserID).First(&targetMember).Error; err != nil {
+			return errors.New("目标用户不在房间中")
+		}
+
+		available := s.roomService.CalculateTableBalanceWithDB(tx, roomID)
+		if available <= 0 {
+			return errors.New("桌面没有可转移的积分")
+		}
+
+		transferredAmount = available
+
+		if err := s.roomService.UpdateUserBalanceWithDB(tx, roomID, targetUserID, transferredAmount); err != nil {
+			return err
+		}
+
+		var err error
+		targetBalance, err = s.roomService.GetUserBalanceWithDB(tx, roomID, targetUserID)
+		if err != nil {
+			return err
+		}
+
+		actorBalance, err = s.roomService.GetUserBalanceWithDB(tx, roomID, userID)
+		if err != nil {
+			return err
+		}
+
+		var targetUser models.User
+		desc := fmt.Sprintf("将桌面%d积分转移给用户%d", transferredAmount, targetUserID)
+		if err := tx.First(&targetUser, targetUserID).Error; err == nil {
+			desc = fmt.Sprintf("将桌面%d积分转移给%s", transferredAmount, targetUser.Nickname)
+		}
+
+		amountCopy := transferredAmount
+		targetCopy := targetUserID
+		op, err := s.roomService.recordOperationWithDB(tx, roomID, userID, models.OpTypeForceTransfer, &amountCopy, &targetCopy, desc)
+		if err != nil {
+			return err
+		}
+		operation = op
+
+		tableBalance = s.roomService.CalculateTableBalanceWithDB(tx, roomID)
+
+		return nil
+	})
+
+	if err != nil {
+		log.Printf("积分强制转移失败: RoomID=%d, UserID=%d, TargetUserID=%d, %v", roomID, userID, targetUserID, err)
+		return 0, 0, 0, 0, err
+	}
+
+	log.Printf("积分强制转移成功: RoomID=%d, UserID=%d, TargetUserID=%d, Amount=%d", roomID, userID, targetUserID, transferredAmount)
+
+	if operation != nil {
+		s.roomService.broadcastForceTransfer(roomID, userID, targetUserID, transferredAmount, actorBalance, targetBalance, tableBalance, operation.CreatedAt)
+	}
+
+	return actorBalance, targetBalance, tableBalance, transferredAmount, nil
+}
+
 // NiuniuBet 牛牛下注（给某人下注）
 func (s *OperationService) NiuniuBet(roomID, userID uint, bets []NiuniuBetItem) (int, int, error) {
 	totalAmount := 0

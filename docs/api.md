@@ -220,6 +220,7 @@
 | ---- | ---- | ---- |
 | `/rooms/:id/bet` | POST | 德扑支出，`amount` 必须为正整数 |
 | `/rooms/:id/withdraw` | POST | 收回积分，`amount <= 0` 表示“全收” |
+| `/rooms/:id/force-transfer` | POST | 将桌面所有积分强制转移给指定成员 |
 | `/rooms/:id/niuniu-bet` | POST | 牛牛下注，批量给多人下注 |
 | `/rooms/:id/operations` | GET | 获取房间操作历史（只包含用户本次加入后的记录） |
 | `/rooms/:id/history-amounts` | GET | 最近 6 条下注/收回的快捷金额 |
@@ -284,18 +285,46 @@
 }
 ```
 
-### 3.4 操作历史
+### 3.4 积分强制转移
+
+请求体：`{"target_user_id": 17}`。
+
+调用方需要同时满足：
+
+- 仍在房间中（`room_members.left_at IS NULL`）
+- 当前桌面存在可转移的积分
+- 目标用户仍在房间中
+
+成功示例：
+```json
+{
+  "code": 0,
+  "message": "积分已转移",
+  "data": {
+    "table_balance": 0,
+    "transferred_amount": 320,
+    "target_user_id": 17,
+    "target_balance": 680,
+    "actor_user_id": 16,
+    "actor_balance": 0
+  }
+}
+```
+
+若桌面没有积分或目标用户离开房间，会返回 `400` 并附带错误原因。
+
+### 3.5 操作历史
 
 请求：`GET /api/rooms/7/operations?limit=10&offset=0`
 
 响应中的每条操作都包含：
 
-- `operation_type`：`join` / `leave` / `bet` / `withdraw` / `kick` / `niuniu_bet` / `settlement_initiated` / `settlement_confirmed`
+- `operation_type`：`join` / `leave` / `bet` / `withdraw` / `force_transfer` / `kick` / `niuniu_bet` / `settlement_initiated` / `settlement_confirmed`
 - `amount`：仅在下注、收回、牛牛下注等涉及积分时存在
 - `description`：大部分操作是中文描述，牛牛下注会写入 JSON 字符串
-- `target_user_id` 与 `target_nickname`：仅在踢人操作存在
+- `target_user_id` 与 `target_nickname`：存在于踢人与积分强制转移操作
 
-### 3.5 快捷金额
+### 3.6 快捷金额
 
 `GET /api/rooms/:room_id/history-amounts`
 
@@ -396,6 +425,7 @@
 { "type": "bet", "data": { "user_id": 16, "nickname": "测试用户1", "amount": 100, "balance": -100, "table_balance": 100, "created_at": "2025-11-07T05:52:30Z" } }
 { "type": "withdraw", "data": { "user_id": 16, "nickname": "测试用户1", "amount": 150, "balance": 0, "table_balance": 0, "created_at": "2025-11-07T05:52:40Z" } }
 { "type": "niuniu_bet", "data": { "user_id": 16, "nickname": "测试用户1", "total_amount": 50, "balance": -50, "table_balance": 50, "bets": [ { "to_user_id": 17, "to_nickname": "测试用户2", "amount": 50 } ], "created_at": "2025-11-07T05:52:45Z" } }
+{ "type": "force_transfer", "data": { "user_id": 16, "nickname": "测试用户1", "target_user_id": 17, "target_nickname": "测试用户2", "amount": 320, "actor_balance": 0, "target_balance": 680, "table_balance": 0, "created_at": "2025-11-07T05:53:10Z" } }
 { "type": "settlement_initiated", "data": { "initiated_by": 16, "initiated_by_nickname": "测试用户1", "initiated_at": "2025-11-07T05:52:50Z", "table_balance": 0, "settlement_plan": [] } }
 { "type": "settlement_confirmed", "data": { "confirmed_by": 16, "confirmed_by_nickname": "测试用户1", "settlement_batch": "fd13a3d8-5cbe-4c91-8358-723b01344b59", "settled_at": "2025-11-07T05:52:50.390222Z" } }
 { "type": "room_dissolved", "data": { "room_id": 6, "dissolved_at": "2025-11-07T11:52:00Z" } }

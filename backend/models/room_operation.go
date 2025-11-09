@@ -29,6 +29,7 @@ const (
 	OpTypeReturn              = "return"               // 返回房间
 	OpTypeBet                 = "bet"                  // 下注/支出
 	OpTypeWithdraw            = "withdraw"             // 收回
+	OpTypeForceTransfer       = "force_transfer"       // 积分强制转移
 	OpTypeKick                = "kick"                 // 被踢出
 	OpTypeSettlementInitiated = "settlement_initiated" // 发起结算
 	OpTypeSettlementConfirmed = "settlement_confirmed" // 确认结算

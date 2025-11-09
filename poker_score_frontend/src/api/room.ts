@@ -45,6 +45,11 @@ export function withdraw(roomId: number, amount: number) {
   return post(`/rooms/${roomId}/withdraw`, { amount })
 }
 
+// 积分强制转移
+export function forceTransfer(roomId: number, targetUserId: number) {
+  return post(`/rooms/${roomId}/force-transfer`, { target_user_id: targetUserId })
+}
+
 // 牛牛下注
 export function niuniuBet(roomId: number, bets: Array<{ to_user_id: number; amount: number }>) {
   return post(`/rooms/${roomId}/niuniu-bet`, { bets })

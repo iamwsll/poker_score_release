@@ -500,15 +500,15 @@ func (s *RoomService) CalculateTableBalanceWithDB(db *gorm.DB, roomID uint) int 
 		return 0
 	}
 
-	var totalWithdraw int64
+	var totalReduction int64
 	if err := db.Model(&models.RoomOperation{}).
-		Where("room_id = ? AND operation_type = ?", roomID, models.OpTypeWithdraw).
+		Where("room_id = ? AND operation_type IN ?", roomID, []string{models.OpTypeWithdraw, models.OpTypeForceTransfer}).
 		Select("COALESCE(SUM(amount), 0)").
-		Scan(&totalWithdraw).Error; err != nil {
+		Scan(&totalReduction).Error; err != nil {
 		return 0
 	}
 
-	tableBalance := int(totalBet - totalWithdraw)
+	tableBalance := int(totalBet - totalReduction)
 	if tableBalance < 0 {
 		tableBalance = 0
 	}
@@ -558,6 +558,7 @@ func (s *RoomService) checkAndDissolveRoom(roomID uint) {
 		models.OpTypeBet,
 		models.OpTypeWithdraw,
 		models.OpTypeNiuniuBet,
+		models.OpTypeForceTransfer,
 	}
 
 	var lastFinancialOp models.RoomOperation
@@ -873,6 +874,48 @@ func (s *RoomService) broadcastWithdraw(roomID, userID uint, amount, myBalance, 
 	}
 
 	log.Printf("广播收回: RoomID=%d, UserID=%d, Amount=%d", roomID, userID, amount)
+	s.hub.BroadcastToRoom(roomID, payload)
+}
+
+func (s *RoomService) broadcastForceTransfer(roomID, userID, targetUserID uint, amount, actorBalance, targetBalance, tableBalance int, createdAt time.Time) {
+	if s.hub == nil {
+		return
+	}
+
+	var actor models.User
+	if err := models.DB.First(&actor, userID).Error; err != nil {
+		log.Printf("广播积分强制转移时获取操作者失败: RoomID=%d, UserID=%d, %v", roomID, userID, err)
+		return
+	}
+
+	var target models.User
+	if err := models.DB.First(&target, targetUserID).Error; err != nil {
+		log.Printf("广播积分强制转移时获取目标用户失败: RoomID=%d, TargetUserID=%d, %v", roomID, targetUserID, err)
+		return
+	}
+
+	message := ws.Message{
+		Type: "force_transfer",
+		Data: map[string]interface{}{
+			"user_id":         actor.ID,
+			"nickname":        actor.Nickname,
+			"target_user_id":  target.ID,
+			"target_nickname": target.Nickname,
+			"amount":          amount,
+			"actor_balance":   actorBalance,
+			"target_balance":  targetBalance,
+			"table_balance":   tableBalance,
+			"created_at":      createdAt.Format(time.RFC3339),
+		},
+	}
+
+	payload, err := json.Marshal(message)
+	if err != nil {
+		log.Printf("序列化积分强制转移消息失败: RoomID=%d, UserID=%d, %v", roomID, userID, err)
+		return
+	}
+
+	log.Printf("广播积分强制转移: RoomID=%d, UserID=%d, TargetUserID=%d, Amount=%d", roomID, userID, targetUserID, amount)
 	s.hub.BroadcastToRoom(roomID, payload)
 }
 

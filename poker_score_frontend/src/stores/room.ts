@@ -613,6 +613,71 @@ export const useRoomStore = defineStore('room', () => {
         break
       }
 
+      case 'force_transfer': {
+        if (typeof message.data.table_balance === 'number') {
+          updateTableBalance(message.data.table_balance)
+        }
+
+        const actorId = Number(message.data.user_id)
+        const actorNickname =
+          typeof message.data.nickname === 'string' ? message.data.nickname : ''
+        const actorBalanceValue = Number(message.data.actor_balance)
+        const actorExisting =
+          Number.isFinite(actorId) && actorId > 0
+            ? roomInfo.value?.members.find((m) => m.user_id === actorId)
+            : undefined
+
+        if (Number.isFinite(actorId) && actorId > 0) {
+          updateMember({
+            user_id: actorId,
+            nickname: actorNickname || actorExisting?.nickname || '',
+            ...(Number.isFinite(actorBalanceValue) ? { balance: actorBalanceValue } : {}),
+            status: actorExisting?.status ?? 'online',
+          })
+
+          if (actorId === userStore.user?.id && Number.isFinite(actorBalanceValue)) {
+            updateMyBalance(actorBalanceValue)
+          }
+        }
+
+        const targetId = Number(message.data.target_user_id)
+        const targetNickname =
+          typeof message.data.target_nickname === 'string' ? message.data.target_nickname : ''
+        const targetBalanceValue = Number(message.data.target_balance)
+        const targetExisting =
+          Number.isFinite(targetId) && targetId > 0
+            ? roomInfo.value?.members.find((m) => m.user_id === targetId)
+            : undefined
+
+        if (Number.isFinite(targetId) && targetId > 0) {
+          updateMember({
+            user_id: targetId,
+            nickname: targetNickname || targetExisting?.nickname || '',
+            ...(Number.isFinite(targetBalanceValue) ? { balance: targetBalanceValue } : {}),
+            status: targetExisting?.status ?? 'online',
+          })
+
+          if (targetId === userStore.user?.id && Number.isFinite(targetBalanceValue)) {
+            updateMyBalance(targetBalanceValue)
+          }
+        }
+
+        const amountValue = Number(message.data.amount)
+
+        addOperation({
+          id: Date.now(),
+          user_id: Number.isFinite(actorId) && actorId > 0 ? actorId : 0,
+          nickname: actorNickname || actorExisting?.nickname || '',
+          operation_type: 'force_transfer',
+          amount: Number.isFinite(amountValue) ? amountValue : undefined,
+          description: '执行了积分强制转移',
+          target_user_id: Number.isFinite(targetId) && targetId > 0 ? targetId : undefined,
+          target_nickname: targetNickname || targetExisting?.nickname || undefined,
+          created_at: message.data.created_at ?? new Date().toISOString(),
+        })
+        break
+      }
+
       case 'settlement_initiated':
         // 发起结算
         settlementContext.value = {
