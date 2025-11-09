@@ -216,7 +216,7 @@ func (s *RoomService) KickUser(roomID, userID, targetUserID uint) error {
 	}
 
 	now := time.Now()
-	if err := models.DB.Model(&member).Update("status", "kicked").Error; err != nil {
+	if err := models.DB.Model(&member).Update("status", "offline").Error; err != nil {
 		log.Printf("踢出用户失败: %v", err)
 		return err
 	}
@@ -324,10 +324,6 @@ func (s *RoomService) GetLastRoom(userID uint) (*models.Room, error) {
 
 	if err != nil {
 		return nil, errors.New("没有找到上次加入的房间")
-	}
-
-	if member.Status == "kicked" {
-		return nil, errors.New("您已被移出房间")
 	}
 
 	// 查询房间信息
@@ -805,7 +801,7 @@ func (s *RoomService) broadcastUserKicked(roomID, kickedUserID, kickedBy uint, k
 			"nickname":           targetUser.Nickname,
 			"kicked_by":          kicker.ID,
 			"kicked_by_nickname": kicker.Nickname,
-			"status":             "kicked",
+			"status":             "offline",
 			"kicked_at":          kickedAt.Format(time.RFC3339),
 		},
 	}

@@ -161,7 +161,7 @@
 | `/rooms/last` | GET | 返回用户最近一次加入且仍为 `active` 的房间 |
 | `/rooms/:room_id` | GET | 获取房间详情（要求当前仍是成员） |
 | `/rooms/:room_id/leave` | POST | 将自己状态标记为离线 |
-| `/rooms/:room_id/kick` | POST | 将某成员标记为 `kicked` |
+| `/rooms/:room_id/kick` | POST | 将某成员标记为 `offline` 并广播踢出事件 |
 
 通用返回结构：
 ```json
@@ -192,7 +192,7 @@
 
 - `room_type` 仅允许 `texas` 或 `niuniu`
 - `chip_rate` 是“积分:人民币”的字符串，如 `20:1`
-- `members[].status` 可能为 `online`、`offline`、`kicked`
+- `members[].status` 可能为 `online`、`offline`
 - 离线或被踢出的成员仍然留在房间列表中，`left_at` 字段目前不会被写入
 - `LeaveRoom` 与 `KickUser` 只改变状态，不会删除 `room_members` 记录
 - 任何成员都可以调用踢人接口，服务端未限制房主
@@ -392,7 +392,7 @@
 ```json
 { "type": "user_joined", "data": { "user_id": 18, "nickname": "测试用户3", "balance": 0, "status": "online", "joined_at": "2025-11-07T05:52:24.220433Z" } }
 { "type": "user_left", "data": { "user_id": 18, "nickname": "测试用户3", "status": "offline", "left_at": "2025-11-07T05:55:24Z" } }
-{ "type": "user_kicked", "data": { "user_id": 18, "nickname": "测试用户3", "kicked_by": 16, "kicked_by_nickname": "测试用户1", "status": "kicked", "kicked_at": "2025-11-07T05:56:36Z" } }
+{ "type": "user_kicked", "data": { "user_id": 18, "nickname": "测试用户3", "kicked_by": 16, "kicked_by_nickname": "测试用户1", "status": "offline", "kicked_at": "2025-11-07T05:56:36Z" } }
 { "type": "bet", "data": { "user_id": 16, "nickname": "测试用户1", "amount": 100, "balance": -100, "table_balance": 100, "created_at": "2025-11-07T05:52:30Z" } }
 { "type": "withdraw", "data": { "user_id": 16, "nickname": "测试用户1", "amount": 150, "balance": 0, "table_balance": 0, "created_at": "2025-11-07T05:52:40Z" } }
 { "type": "niuniu_bet", "data": { "user_id": 16, "nickname": "测试用户1", "total_amount": 50, "balance": -50, "table_balance": 50, "bets": [ { "to_user_id": 17, "to_nickname": "测试用户2", "amount": 50 } ], "created_at": "2025-11-07T05:52:45Z" } }
@@ -423,7 +423,7 @@
 
 1. 所有余额相关操作均包裹在数据库事务中，确保原子性与一致性。
 2. `user_balances` 记录不会被删除；结算后统一重置为 0。
-3. `room_members.left_at` 当前未被写入，仅依靠 `status` 区分 `online/offline/kicked`。
+3. `room_members.left_at` 当前未被写入，暂依靠 `status` 区分 `online/offline`（踢出事件会单独通知，状态同 `offline`）。
 4. Session 有效期较长（10 年），如需手动失效可删除 `sessions` 表记录。
 5. 服务端日志使用标准库 `log` 输出到控制台。
 6. WebSocket 广播采用房间级 Hub，消息在同一连接上使用换行符分隔多条 JSON。

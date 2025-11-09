@@ -83,7 +83,7 @@
 | user_id | INTEGER | 用户ID | NOT NULL, FOREIGN KEY |
 | joined_at | DATETIME | 加入时间 | NOT NULL |
 | left_at | DATETIME | 离开时间 | NULL |
-| status | VARCHAR(20) | 状态（online/offline/kicked） | NOT NULL, DEFAULT 'online' |
+| status | VARCHAR(20) | 状态（online/offline） | NOT NULL, DEFAULT 'online' |
 
 **索引：**
 - idx_room_user: (room_id, user_id)
@@ -95,7 +95,7 @@
 - room_id → rooms.id
 - user_id → users.id
 
-**注意：** 当前实现仅在用户首次进入房间时创建记录，后续通过`status`字段标记`online/offline/kicked`，`left_at`字段暂未被代码写入。
+**注意：** 当前实现仅在用户首次进入房间时创建记录，后续通过`status`字段标记`online/offline`，`left_at`字段暂未被代码写入。
 
 ---
 
