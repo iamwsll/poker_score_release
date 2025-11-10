@@ -36,4 +36,3 @@ coverage
 __screenshots__/
 
 android/
-capacitor.config.ts
