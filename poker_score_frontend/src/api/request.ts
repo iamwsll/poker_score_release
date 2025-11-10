@@ -1,10 +1,51 @@
 import axios, { type AxiosInstance, type AxiosRequestConfig, type AxiosResponse } from 'axios'
+import { Capacitor } from '@capacitor/core'
 import { message } from 'ant-design-vue'
 import router from '@/router'
 
 const DEFAULT_API_PATH = '/api'
 const rawApiBaseUrl = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
-const apiBaseUrl = rawApiBaseUrl && rawApiBaseUrl.length > 0 ? rawApiBaseUrl : DEFAULT_API_PATH
+const rawNativeApiBaseUrl = (import.meta.env.VITE_NATIVE_API_BASE_URL as string | undefined)?.trim()
+
+function isNativeRuntime(): boolean {
+  if (typeof Capacitor === 'undefined') {
+    return false
+  }
+  if (typeof Capacitor.isNativePlatform === 'function') {
+    return Capacitor.isNativePlatform()
+  }
+  return Capacitor.getPlatform() !== 'web'
+}
+
+function resolveApiBaseUrl(): string {
+  const nativeRuntime = isNativeRuntime()
+
+  if (nativeRuntime) {
+    if (rawNativeApiBaseUrl && rawNativeApiBaseUrl.length > 0) {
+      return rawNativeApiBaseUrl
+    }
+
+    if (rawApiBaseUrl && isAbsoluteHttpUrl(rawApiBaseUrl)) {
+      return rawApiBaseUrl
+    }
+
+    console.warn(
+      '[request] 检测到原生运行环境，但未设置 `VITE_NATIVE_API_BASE_URL`，已回退到默认值 `/api`，请在构建前设置完整的后端地址。'
+    )
+  }
+
+  if (rawApiBaseUrl && rawApiBaseUrl.length > 0) {
+    return rawApiBaseUrl
+  }
+
+  return DEFAULT_API_PATH
+}
+
+function isAbsoluteHttpUrl(url: string): boolean {
+  return url.startsWith('http://') || url.startsWith('https://')
+}
+
+const apiBaseUrl = resolveApiBaseUrl()
 
 function normalizeBaseUrl(url: string): string {
   if (url.startsWith('http://') || url.startsWith('https://')) {

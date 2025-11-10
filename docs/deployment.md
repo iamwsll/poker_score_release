@@ -115,7 +115,7 @@ EOF
 ```ini
 APP_ENV=production
 SERVER_PORT=:8080
-SERVER_ALLOWED_ORIGINS=https://poker.iamwsll.cn
+SERVER_ALLOWED_ORIGINS=https://poker.iamwsll.cn,capacitor://localhost,https://localhost,http://localhost
 SERVER_COOKIE_DOMAIN=poker.iamwsll.cn
 SERVER_COOKIE_SECURE=true
 SERVER_COOKIE_SAME_SITE=Lax
@@ -310,6 +310,40 @@ sudo docker exec -it <nginx_container_name> nginx -s reload
 - **后端**：通过调整 `APP_ENV` 与相关环境变量即可切换；开发环境默认允许 `http://localhost:5173` 并关闭 HTTPS Cookie。
 - **前端**：`npm run dev` 自动读取 `import.meta.env`，默认通过 Vite 代理访问 `localhost:8080`；若需指向远程环境，可设置 `VITE_API_BASE_URL` 与 `VITE_BACKEND_ORIGIN`。
 - **Nginx**：开发阶段可使用本地代理（如 `vite.config.ts` 中的代理配置），生产环境按上述 server 块部署。
+
+## 8. Capacitor 原生应用打包说明
+
+将前端通过 Capacitor 封装为 Android/iOS 原生应用时，需要额外配置网络访问：
+0. 环境准备:
+```bash
+# 在 Vue 项目中安装 Capacitor 依赖
+npm install @capacitor/core @capacitor/cli
+
+# 初始化 Capacitor
+npx cap init
+
+# 安装 Android 平台支持
+npm install @capacitor/android
+
+# 将 Android 平台“添加”到你的项目中
+npx cap add android
+
+```
+1. **前端环境变量**
+   - 参考`.env.native` ,这里配置了必要的环境变量.
+   - 并通过 `npm run build-only -- --mode native` 进行构建.
+   - 进行 `npx cap sync android`。
+   - 进行 `npx cap open android`。
+
+2. **后端 CORS 设置**
+   - 这个设置已经在生产环境后端的.poker.env里配置了.(server_allowed_origins)
+   - 变更配置后需重启后端服务。
+
+3. **Android 端其他注意事项**
+   - 调试网络请求,在chrome里打开chrome://inspect/#devices,启用Discover USB devices,找到手机设备,点击inspect.
+4. 打包.
+
+按照以上配置，打包后的原生应用即可正常访问生产后端并与 Web 端保持一致行为。
 
 按照以上步骤即可在不影响已部署站点的情况下新增 `poker.iamwsll.cn` 并完成前后端部署。
 

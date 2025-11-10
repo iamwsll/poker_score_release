@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core'
 import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import { message as antdMessage } from 'ant-design-vue'
@@ -308,6 +309,46 @@ export const useRoomStore = defineStore('room', () => {
 
   function resolveBackendOrigin() {
     const overrideOrigin = (import.meta.env.VITE_BACKEND_ORIGIN as string | undefined)?.trim()
+    const nativeOverrideOrigin = (import.meta.env.VITE_NATIVE_BACKEND_ORIGIN as string | undefined)?.trim()
+    const rawApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
+    const rawNativeApiBase = (import.meta.env.VITE_NATIVE_API_BASE_URL as string | undefined)?.trim()
+
+    const nativeRuntime =
+      typeof Capacitor !== 'undefined' &&
+      (typeof Capacitor.isNativePlatform === 'function'
+        ? Capacitor.isNativePlatform()
+        : Capacitor.getPlatform() !== 'web')
+
+    if (nativeRuntime) {
+      const nativeOriginCandidates = [nativeOverrideOrigin, overrideOrigin].filter(isNonEmptyString)
+      for (const candidate of nativeOriginCandidates) {
+        if (isAbsoluteHttpUrl(candidate)) {
+          try {
+            const resolved = new URL(candidate)
+            return resolved.origin
+          } catch (error) {
+            console.warn('无法解析原生环境覆盖的后端地址', error)
+          }
+        }
+      }
+
+      const nativeApiCandidates = [rawNativeApiBase, rawApiBase].filter(isNonEmptyString)
+      for (const candidate of nativeApiCandidates) {
+        if (candidate && isAbsoluteHttpUrl(candidate)) {
+          try {
+            const resolved = new URL(candidate)
+            return resolved.origin
+          } catch (error) {
+            console.warn('无法解析原生环境 API 基础地址', error)
+          }
+        }
+      }
+
+      console.warn(
+        '[room] 检测到原生运行环境，但未配置可用的后端地址，请设置 `VITE_NATIVE_BACKEND_ORIGIN` 或提供完整的 `VITE_NATIVE_API_BASE_URL`。'
+      )
+    }
+
     if (overrideOrigin) {
       return overrideOrigin
     }
@@ -320,7 +361,6 @@ export const useRoomStore = defineStore('room', () => {
       return `${protocol}//${hostname}:${defaultPort}`
     }
 
-    const rawApiBase = (import.meta.env.VITE_API_BASE_URL as string | undefined)?.trim()
     if (rawApiBase) {
       try {
         const resolved = new URL(rawApiBase, window.location.origin)
@@ -349,7 +389,7 @@ export const useRoomStore = defineStore('room', () => {
 
     const wsUrl = new URL(`/api/ws/room/${roomId}`, baseOrigin)
     wsUrl.protocol = wsUrl.protocol === 'https:' ? 'wss:' : 'ws:'
-    
+
     // 添加session_id到查询参数（用于移动端浏览器）
     const sessionId = localStorage.getItem('session_id')
     if (sessionId) {
@@ -805,4 +845,12 @@ export const useRoomStore = defineStore('room', () => {
     setSettlementContext,
   }
 })
+
+function isNonEmptyString(value: string | undefined): value is string {
+  return typeof value === 'string' && value.trim().length > 0
+}
+
+function isAbsoluteHttpUrl(url: string): boolean {
+  return typeof url === 'string' && (url.startsWith('http://') || url.startsWith('https://'))
+}
 

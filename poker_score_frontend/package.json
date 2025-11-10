@@ -16,6 +16,10 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
+    "@capacitor/android": "^7.4.4",
+    "@capacitor/cli": "^7.4.4",
+    "@capacitor/core": "^7.4.4",
+    "@capacitor/status-bar": "^7.0.3",
     "ant-design-vue": "^4.2.6",
     "axios": "^1.13.2",
     "dayjs": "^1.11.19",

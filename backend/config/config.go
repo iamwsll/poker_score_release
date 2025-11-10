@@ -43,7 +43,7 @@ type SessionConfig struct {
 func GetConfig() *Config {
 	env := getEnv("APP_ENV", "development")
 
-	defaultOrigins := []string{"http://localhost:5173", "http://localhost:3000", "http://localhost:80"}
+	defaultOrigins := []string{"http://localhost:5173", "http://localhost:3000", "http://localhost:80", "capacitor://localhost", "https://localhost", "http://localhost"}
 	if env == "production" {
 		defaultOrigins = []string{"https://poker.iamwsll.cn"}
 	}
