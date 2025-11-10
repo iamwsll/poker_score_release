@@ -394,7 +394,7 @@
 
 <script setup lang="ts">
 import { ref, reactive, computed, onMounted, onUnmounted, watch, type Ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute, useRouter, onBeforeRouteLeave } from 'vue-router'
 import { message, Modal } from 'ant-design-vue'
 import {
   ShareAltOutlined,
@@ -832,6 +832,14 @@ const handleLeaveRoom = () => {
     }
   })
 }
+
+onBeforeRouteLeave((_to, _from, next) => {
+  roomApi.leaveRoom(roomId.value).catch((error) => {
+    console.warn('[room] 自动离开房间失败', error)
+  })
+  roomStore.clearRoomInfo()
+  next()
+})
 
 // 支出（德扑）
 const handleBet = async () => {
