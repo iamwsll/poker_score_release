@@ -16,6 +16,32 @@
 - **后台管理**：账号管理、房间列表、盈亏明细、进出房间历史，支持自定义管理员账号。
 - **实时同步与移动适配**：WebSocket 推送积分变化，前端对桌面/移动端双端适配。
 - **可运维性**：配置化 CORS & Cookie 策略、数据库自动迁移、脚本化部署与测试报告。
+## 功能演示
+- 注册
+![alt text](docs/image/1762708073619)
+- 主页面
+![alt text](docs/image/1762753611134)
+- 创建房间
+![alt text](docs/image/1762753637622)
+- 邀请好友
+![alt text](docs/image/1762753668591)
+- 下注
+![alt text](docs/image/1762753699451)
+- 收回
+![alt text](docs/image/1762753721979)
+- 排行
+![alt text](docs/image/1762753744141)
+- 结算
+![alt text](docs/image/1762753778598)
+- 积分强制转移/踢出用户/解散房间
+![alt text](docs/image/1762753837045)
+- 个人信息
+![alt text](docs/image/1762753859679)
+- 历史战绩查询
+![alt text](docs/image/1762753882736)
+- 管理员后台管理
+![alt text](docs/image/1762753909879)
+更多功能请见api文档.
 
 ---
 
