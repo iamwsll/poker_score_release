@@ -190,9 +190,9 @@ backend/
 ---
 
 ## 测试与质量
-- `test_api.py` 自动化脚本覆盖主要 REST 流程（注册、房间、结算、管理员等）
-- 运行结果示例见 `docs/test_report.md`
-- 建议在功能改动后重新跑一次回归脚本
+- `backend/controllers/integration_test.go`：基于 Go 原生测试框架的端到端流程用例（注册→房间→操作→结算→后台）。
+- `go test ./...`：默认执行所有单元/集成测试，输出断言细节。
+- Legacy `test/test_api.py`：仅在需要真实 HTTP 冒烟时使用，依赖 Python + Requests。
 
 ---
 

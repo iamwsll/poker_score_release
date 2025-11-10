@@ -59,7 +59,7 @@
 
 ### 其他
 - SQLite3 持久化（默认 `backend/database.db`）
-- Python + Requests 自动化接口测试
+- Go 原生 `go test` 集成测试（`backend/controllers/integration_test.go`），附带 Legacy Python 脚本仅供手工冒烟
 - Nginx 反向代理 + HTTPS 强制跳转（生产环境）
 
 ---
@@ -89,9 +89,10 @@ poker_score/
 │   ├── dist/                   # 构建产物（示例）
 │   └── package.json            # 前端依赖
 ├── test/                       # 自动化测试与辅助脚本
-│   ├── test_api.py             # 后端接口回归脚本
+│   ├── TEST_README.md          # 测试指南（Go 集成测试 & Legacy Python）
+│   ├── test_api.py             # Legacy HTTP 冒烟脚本（需手动启动后端）
 │   ├── promote_admin.py        # 提升账号为管理员
-│   └── requirements_test.txt   # 测试依赖
+│   └── requirements_test.txt   # Legacy Python 依赖
 ├── deploy.sh                   # 本地一键同步示例脚本
 └── README.md
 ```
@@ -103,7 +104,7 @@ poker_score/
 - Go ≥ **1.25.4**
 - Node.js ≥ **20.19**（建议与 `package.json` `engines` 一致）
 - npm（或 pnpm / yarn）
-- Python ≥ 3.10（用于运行自动化测试，可选）
+- Python ≥ 3.10（仅在使用 Legacy Python 测试脚本时需要）
 - SQLite 随 `mattn/go-sqlite3` 驱动自动使用，无需额外安装
 
 ### 2. 安装依赖
@@ -147,70 +148,4 @@ npm run dev
 | `SERVER_COOKIE_DOMAIN` | 空 | Cookie Domain，生产默认 `poker.iamwsll.cn` |
 | `SERVER_COOKIE_SECURE` | `false` (prod 默认 `true`) | 是否仅在 HTTPS 传输 Cookie |
 | `SERVER_COOKIE_SAME_SITE` | `Lax` | Cookie SameSite 策略 |
-| `DATABASE_PATH` | `./database.db` | SQLite 文件路径 |
-| `DATABASE_MAX_IDLE_CONNS` | `10` | 数据库连接池最小空闲连接 |
-| `DATABASE_MAX_OPEN_CONNS` | `100` | 数据库连接池最大连接数 |
-| `DATABASE_CONN_MAX_LIFETIME` | `1h` | 连接最大生命周期 |
-| `SESSION_COOKIE_NAME` | `poker_session` | 会话 Cookie 名称 |
-| `SESSION_MAX_AGE` | `87600h` | Session 有效期（默认 10 年） |
-
-生产环境配置示例与 systemd/Nginx 模板详见 `docs/deployment.md`。
-
----
-
-## API 概览
-- 认证：注册、登录、登出、获取个人信息、修改昵称/密码
-- 房间：创建、加入、返回最近房间、离开/返回、踢人、解散
-- 操作：德扑下注/收回、牛牛批量下注、强制转账、操作历史、历史额度
-- 结算：发起结算、确认结算（积分守恒校验）
-- 战绩：今晚战绩及时间段筛选
-- 管理后台：用户、房间、结算记录、进出历史（需管理员角色）
-- WebSocket：`/api/ws/room/:room_id` 房间实时广播
-
-完整请求/响应示例请查看 `docs/api.md`。
-
----
-
-## 自动化测试
-1. 启动本地后端（必须）。
-2. 安装依赖并运行：
-   ```bash
-   cd /Users/wsll/workspace/code/poker_score/test
-   pip install -r requirements_test.txt
-   python3 test_api.py
-   ```
-3. 测试结果会在终端输出，并生成 `docs/test_report.md`。
-
-额外工具：`python3 test/promote_admin.py <phone>` 可将指定手机号用户提升为管理员（直接操作开发库）。
-
----
-
-## 部署摘要
-1. 参考 `docs/deployment.md` 准备服务器目录、环境变量与 systemd 服务。
-2. 前端执行 `npm run build`，将 `poker_score_frontend/dist` 上传至服务器（可使用仓库内 `deploy.sh` 作为示例）。
-3. 后端在服务器上构建 `go build -o poker_server` 并通过 systemd 启动。
-4. Nginx 开启 HTTPS 并将 `/api`、`/api/ws` 反向代理到后端，启用 HTTP → HTTPS 重定向。
-
----
-
-## 常见问题
-- 务必检查 Go 版本、`DATABASE_PATH` 是否存在.
-- 生产环境必须使用 HTTPS.
-- 管理员权限问题：自己改个数据库得了
-
----
-
-## 文档导航
-- `docs/api.md`：完整 API 文档
-- `docs/database.md`：表结构与关系
-- `docs/deployment.md`：生产部署细节
-- `docs/tech-stack.md`：技术选型说明
-- `docs/test_report.md`：最近一次自动化测试结果
-
----
-
-## License
-MIT
-
-## 联系方式
-如有问题，欢迎提交 Issue 或 PR。
+| `DATABASE_PATH`
