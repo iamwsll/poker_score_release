@@ -135,6 +135,11 @@ npm run dev
   - 手机号：`13800138000`  
   - 密码：`admin123`
 
+## 测试与验证
+- 后端核心测试：`cd backend && go test ./...`。该命令会串行运行控制器级的全链路集成测试（`controllers/integration_test.go`）以及结算领域的服务单测（`services/settlement_service_test.go`），默认使用内存 SQLite，不会污染本地 `database.db`。
+- 若在受限环境下遇到 `operation not permitted` 的 Go 构建缓存报错，可临时指定自定义缓存目录，例如 `GOCACHE=$(pwd)/.gocache go test ./...`，测试完成后删除该目录即可。
+- Legacy Python 冒烟：`cd test && python3 test_api.py --base-url http://localhost:8080`（需先手动启动后端），主要覆盖旧版回归场景。
+
 ---
 
 ## 配置说明（后端环境变量）

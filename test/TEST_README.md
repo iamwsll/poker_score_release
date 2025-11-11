@@ -16,6 +16,7 @@
 - 结算发起与确认、积分守恒验证
 - 今晚战绩及时间区间查询
 - 后台权限校验、用户信息更新、房间与结算/进出历史查询
+- 结算服务单测补充（`backend/services/settlement_service_test.go`）：校验 `calculateRmbAmount` 的倍率换算逻辑以及 `generateSettlementPlan` 的出入账排序/描述，确保服务层回归无需跑完整集成流程。
 
 ## 可选：Legacy Python 回归脚本
 旧版 `test_api.py` 仍保留用于真实 HTTP 环境的端到端冒烟测试，需手动启动后端并连接本地 `http://localhost:8080`。
@@ -32,4 +33,3 @@ python3 test_api.py
 - **`go test` 提示端口被占用**：确认没有其它进程监听 8080（集成测试默认在内存模式运行，不会绑定端口）。
 - **需要模拟 WebSocket**：目前仅支持手工或专用工具（如 `wscat`），Go 测试聚焦 REST 场景。
 - **仍需旧版报告**：请在 Git 历史中查阅 2025-11-07 之前的 `docs/test_report.md`。
-
