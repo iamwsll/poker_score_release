@@ -71,3 +71,17 @@ const configureAndroidBackNavigation = () => {
 }
 
 configureAndroidBackNavigation()
+
+const registerServiceWorker = () => {
+  if (Capacitor.getPlatform() !== 'web' || !('serviceWorker' in navigator)) {
+    return
+  }
+
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch((error) => {
+      console.warn('[PWA] Service worker registration failed', error)
+    })
+  })
+}
+
+registerServiceWorker()

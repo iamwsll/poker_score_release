@@ -1,0 +1,29 @@
+{
+  "name": "比赛计分器",
+  "short_name": "计分器",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0f172a",
+  "theme_color": "#1677ff",
+  "description": "在手机上快速记录和查看比赛积分的工具。",
+  "icons": [
+    {
+      "src": "/pwa-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/pwa-180.png",
+      "sizes": "180x180",
+      "type": "image/png"
+    }
+  ]
+}

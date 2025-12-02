@@ -46,3 +46,10 @@ npm run build
 ```sh
 npm run lint
 ```
+
+## PWA 使用说明（iOS 安装）
+
+- 本项目已内置 PWA 支持，核心文件：`public/manifest.webmanifest`、`public/sw.js`、`public/pwa-*.png`。
+- 运行 `npm run preview` 或部署到 **HTTPS** 环境后，用 Safari 打开站点。
+- 在 Safari 点击“分享”->“添加到主屏幕”，即可作为独立应用安装（图标来自 `pwa-180.png`）。
+- Service Worker 仅在浏览器平台注册（`src/main.ts`），缓存静态资源并跳过 `/api` 请求。
